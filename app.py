@@ -124,9 +124,15 @@ def tela_login():
                     st.rerun()
                 except PermissionError:
                     st.error("Sua conta não está autorizada ou está inativa.")
-                except Exception:
-                    st.error("Não foi possível entrar. Verifique suas credenciais e a conexão com o Supabase.")
-    st.stop()
+              except Exception as erro:
+    import logging
+
+    logging.exception("Falha no processo de login")
+
+    st.error(
+        "Não foi possível entrar. "
+        "Consulte os logs do aplicativo para identificar a causa."
+    )
 
 
 def listar_opcoes(tabela):
