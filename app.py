@@ -6,6 +6,34 @@ from postgrest import SyncPostgrestClient
 
 st.set_page_config(page_title="Sistema de Gestão Patrimonial IPB - CABO", page_icon="🌿", layout="wide", initial_sidebar_state="collapsed")
 BASE_DIR = Path(__file__).resolve().parent
+
+# DIAGNOSTICO TEMPORARIO DA LOGO
+from pathlib import Path
+
+st.write("### Diagnóstico dos arquivos")
+
+st.write("Pasta do aplicativo:", str(BASE_DIR))
+
+st.write(
+    "Arquivos da pasta principal:",
+    [p.name for p in BASE_DIR.iterdir()]
+)
+
+pasta_assets = BASE_DIR / "assets"
+
+st.write("Pasta assets existe:", pasta_assets.is_dir())
+
+if pasta_assets.is_dir():
+    st.write(
+        "Arquivos dentro de assets:",
+        [p.name for p in pasta_assets.iterdir()]
+    )
+
+st.write(
+    "Logo encontrada:",
+    (pasta_assets / "logo_ipb.png").is_file()
+)
+
 LOGO_PATH = BASE_DIR / "assets" / "logo_ipb.png"
 
 st.markdown("""
