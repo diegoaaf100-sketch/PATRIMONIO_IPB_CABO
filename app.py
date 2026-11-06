@@ -37,16 +37,39 @@ h1, h2, h3 { color: #123f30 !important; }
 """, unsafe_allow_html=True)
 
 
+
 def mostrar_logo(largura=145):
-    if not LOGO_PATH.is_file():
-        st.warning("Logo não encontrada: envie assets/logo_ipb.png para o GitHub.")
-        return
-    try:
-        with Image.open(LOGO_PATH) as img:
-            img.load()
-            st.image(img.copy(), width=largura)
-    except (OSError, ValueError) as exc:
-        st.warning("O arquivo assets/logo_ipb.png não é uma imagem válida. Substitua pelo PNG fornecido.")
+    """Localiza e exibe a logo da IPB."""
+
+    from pathlib import Path
+    from PIL import Image
+
+    pasta_app = Path(__file__).resolve().parent
+
+    caminhos = [
+        pasta_app / "assets" / "logo_ipb.png",
+        Path.cwd() / "assets" / "logo_ipb.png",
+    ]
+
+    for caminho in caminhos:
+        if caminho.is_file():
+            try:
+                with Image.open(caminho) as imagem:
+                    imagem.load()
+                    st.image(imagem.copy(), width=largura)
+                return
+            except Exception:
+                st.error(
+                    "O arquivo da logo foi encontrado, "
+                    "mas não pôde ser aberto."
+                )
+                return
+
+    st.warning(
+        "A logo não foi encontrada na versão publicada. "
+        "Confira o caminho assets/logo_ipb.png."
+    )
+
 
 
 def cliente():
