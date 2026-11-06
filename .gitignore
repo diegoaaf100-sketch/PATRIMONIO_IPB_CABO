@@ -1,1 +1,20 @@
 
+# Arquivos temporarios do Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Senhas e configuracoes privadas
+.streamlit/secrets.toml
+.env
+.env.*
+
+# Ambientes virtuais
+.venv/
+venv/
+
+# Arquivos temporarios
+*.log
+.DS_Store
+Thumbs.db
+
