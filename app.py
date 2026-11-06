@@ -1,274 +1,446 @@
-import streamlit as st
-from pathlib import Path
+import logging
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from PIL import Image
-from supabase import create_client
-from postgrest import SyncPostgrestClient
+from pathlib import Path
 
-st.set_page_config(page_title="Sistema de Gestão Patrimonial IPB - CABO", page_icon="🌿", layout="wide", initial_sidebar_state="expanded")
+import streamlit as st
+from PIL import Image
+from postgrest import SyncPostgrestClient
+from supabase import create_client
+
+
+st.set_page_config(
+    page_title="Sistema de Gestão Patrimonial IPB - CABO",
+    page_icon="🌿",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 BASE_DIR = Path(__file__).resolve().parent
 LOGO_PATH = BASE_DIR / "assets" / "logo_ipb.png"
+LOG = logging.getLogger("patrimonio_ipb")
 
 st.markdown("""
 <style>
 :root { color-scheme: dark; }
 .stApp, [data-testid="stAppViewContainer"] { background: #073f30 !important; color: #fff !important; }
 [data-testid="stHeader"] { background: rgba(7,63,48,.96) !important; }
-[data-testid="stSidebar"] { background: #052f25 !important; border-right: 1px solid #26674f; }
+[data-testid="stSidebar"] { background: #052e23 !important; border-right: 1px solid #28624e; }
 [data-testid="stSidebar"] * { color: #fff !important; }
-h1,h2,h3,h4,p, label, [data-testid="stCaptionContainer"] { color: #fff !important; }
-[data-testid="stForm"], [data-testid="stMetric"] { background: #fff !important; color: #073f30 !important; border: 1px solid #d9e9df; border-radius: 16px; padding: 18px; }
-[data-testid="stForm"] label, [data-testid="stForm"] p, [data-testid="stMetric"] *, [data-testid="stForm"] [data-testid="stWidgetLabel"] { color: #073f30 !important; }
-[data-testid="stForm"] input, [data-testid="stForm"] textarea { color: #073f30 !important; }
-[data-testid="stForm"] [data-baseweb="select"] * { color: #073f30; }
-[data-testid="stFormSubmitButton"] button, .stButton button[kind="primary"] { background: #006341 !important; border: 1px solid #006341 !important; color: #fff !important; border-radius: 10px; font-weight: 700; }
-[data-testid="stFormSubmitButton"] button *, .stButton button[kind="primary"] * { color: #fff !important; }
-[data-testid="stFormSubmitButton"] button:hover, .stButton button[kind="primary"]:hover { background: #004d32 !important; }
-[data-testid="stMetric"] [data-testid="stMetricLabel"] *, [data-testid="stMetric"] [data-testid="stMetricValue"] { color: #073f30 !important; }
-[data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
-[data-testid="stSidebar"] [role="radiogroup"] label { border-radius: 10px; padding: 7px 9px; }
-[data-testid="stSidebar"] [role="radiogroup"] label:hover { background: #176247; }
+[data-testid="stSidebar"] [data-testid="stRadio"] label { border-radius: 10px; padding: 6px; }
+h1, h2, h3, h4, p, label, [data-testid="stCaptionContainer"] { color: #fff !important; }
+[data-testid="stMetric"] { background: #fff; border: 1px solid #d6e7dc; border-radius: 15px; padding: 18px; }
+[data-testid="stMetric"] * { color: #073f30 !important; }
+[data-testid="stForm"] { background: #fff; border: 1px solid #d9e8dd; border-radius: 16px; padding: 22px; box-shadow: 0 12px 30px #001e141a; }
+[data-testid="stForm"] p, [data-testid="stForm"] label, [data-testid="stForm"] [data-testid="stWidgetLabel"] * { color: #103f30 !important; }
+[data-testid="stForm"] [data-testid="stCaptionContainer"] * { color: #476757 !important; }
+[data-testid="stForm"] input, [data-testid="stForm"] textarea { color: #153b2f !important; }
+[data-testid="stForm"] [data-baseweb="select"] * { color: #153b2f !important; }
+[data-testid="stFormSubmitButton"] button, .stButton button[kind="primary"] { background: #006341 !important; border: 1px solid #006341 !important; color: white !important; border-radius: 10px !important; font-weight: 700 !important; }
+[data-testid="stFormSubmitButton"] button *, .stButton button[kind="primary"] * { color: white !important; }
+[data-testid="stFormSubmitButton"] button:hover, .stButton button[kind="primary"]:hover { background: #004b32 !important; border-color: #004b32 !important; }
+[data-testid="stSidebar"] .stButton button { border-color: #8ebba8 !important; }
+[data-testid="stSidebar"] .stButton button:hover { background: #176247 !important; }
 [data-testid="stAlert"] p { color: inherit !important; }
-@media(max-width:768px){[data-testid="stForm"]{padding:12px!important}}
+[data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
+hr { border-color: #37715d !important; }
+.ipb-banner { background: #10543d; border: 1px solid #337b60; border-radius: 16px; padding: 20px 24px; margin: 10px 0 22px; }
+.ipb-banner h1 { font-size: clamp(1.5rem, 3vw, 2.3rem); margin: 0 0 5px; }
+.ipb-banner p { margin: 0; color: #cce7d8 !important; }
+@media(max-width: 768px) { [data-testid="stForm"] { padding: 12px; } .ipb-banner { padding: 15px; } }
 </style>
 """, unsafe_allow_html=True)
 
 
-def mostrar_logo(largura=130):
+def mostrar_logo(largura=120):
     if LOGO_PATH.is_file():
         try:
-            with Image.open(LOGO_PATH) as img:
-                st.image(img.copy(), width=largura)
+            with Image.open(LOGO_PATH) as imagem:
+                st.image(imagem.copy(), width=largura)
         except Exception:
             st.caption("IPB - CABO")
     else:
         st.caption("IPB - CABO")
 
 
-def cliente():
-    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_ANON_KEY"])
+def cliente_auth():
+    return create_client(st.secrets["SUPABASE_URL"].rstrip("/"), st.secrets["SUPABASE_ANON_KEY"])
 
 
-def api_usuario():
-    """Todas as consultas e gravações usam o JWT do usuário e respeitam RLS."""
+def api_usuario(token):
     return SyncPostgrestClient(
         st.secrets["SUPABASE_URL"].rstrip("/") + "/rest/v1",
         headers={
             "apikey": st.secrets["SUPABASE_ANON_KEY"],
-            "Authorization": "Bearer " + st.session_state["access_token"],
+            "Authorization": "Bearer " + token,
         },
     )
 
 
 def consultar_perfil(token, user_id):
-    api = SyncPostgrestClient(
-        st.secrets["SUPABASE_URL"].rstrip("/") + "/rest/v1",
-        headers={"apikey": st.secrets["SUPABASE_ANON_KEY"], "Authorization": "Bearer " + token},
+    resposta = (
+        api_usuario(token).from_("perfis")
+        .select("id,nome_completo,papel,ativo")
+        .eq("id", user_id).limit(1).execute()
     )
-    result = api.from_("perfis").select("id,nome_completo,papel,ativo").eq("id", user_id).limit(1).execute()
-    return result.data[0] if result.data else None
+    return resposta.data[0] if resposta.data else None
 
 
 def limpar_sessao():
-    for k in ("access_token", "refresh_token", "user_id", "profile"):
-        st.session_state.pop(k, None)
+    for chave in ("access_token", "refresh_token", "user_id", "profile"):
+        st.session_state.pop(chave, None)
 
 
 def autenticar(email, senha):
-    response = cliente().auth.sign_in_with_password({"email": email, "password": senha})
-    if not response.session or not response.user:
-        raise ValueError("Credenciais não validadas")
-    perfil = consultar_perfil(response.session.access_token, response.user.id)
+    resposta = cliente_auth().auth.sign_in_with_password({"email": email, "password": senha})
+    if not resposta.session or not resposta.user:
+        raise ValueError("O Supabase não retornou uma sessão válida.")
+    perfil = consultar_perfil(resposta.session.access_token, resposta.user.id)
     if not perfil or not perfil.get("ativo"):
-        raise PermissionError("Usuário sem perfil ativo")
-    st.session_state.update(access_token=response.session.access_token,
-                            refresh_token=response.session.refresh_token,
-                            user_id=response.user.id, profile=perfil)
+        raise PermissionError("Usuário autenticado, mas sem perfil ativo/autorizado na tabela perfis.")
+    st.session_state.update({
+        "access_token": resposta.session.access_token,
+        "refresh_token": resposta.session.refresh_token,
+        "user_id": resposta.user.id,
+        "profile": perfil,
+    })
 
 
 def validar_sessao():
     if not st.session_state.get("refresh_token"):
         return False
     try:
-        response = cliente().auth.refresh_session(st.session_state["refresh_token"])
-        if not response.session or not response.user or response.user.id != st.session_state.get("user_id"):
+        resposta = cliente_auth().auth.refresh_session(st.session_state["refresh_token"])
+        if not resposta.session or not resposta.user:
             return False
-        perfil = consultar_perfil(response.session.access_token, response.user.id)
+        if resposta.user.id != st.session_state.get("user_id"):
+            return False
+        perfil = consultar_perfil(resposta.session.access_token, resposta.user.id)
         if not perfil or not perfil.get("ativo"):
             return False
-        st.session_state.update(access_token=response.session.access_token,
-                                refresh_token=response.session.refresh_token, profile=perfil)
+        st.session_state.update({
+            "access_token": resposta.session.access_token,
+            "refresh_token": resposta.session.refresh_token,
+            "profile": perfil,
+        })
         return True
     except Exception:
+        LOG.exception("Falha ao validar a sessão")
         return False
 
 
+def explicar_erro_login(erro):
+    nome = type(erro).__name__
+    mensagem = str(erro).lower()
+    if isinstance(erro, PermissionError):
+        return str(erro)
+    if "invalid login credentials" in mensagem or "invalid credentials" in mensagem:
+        return "E-mail ou senha inválidos. Confira os dados e tente novamente."
+    if "email not confirmed" in mensagem:
+        return "O e-mail ainda não foi confirmado no Supabase Auth."
+    if "getaddrinfo" in mensagem or "connecterror" in nome.lower():
+        return "Não foi possível localizar o servidor Supabase. Confira SUPABASE_URL em Secrets."
+    if "permission denied" in mensagem or "row-level security" in mensagem:
+        return "O Supabase bloqueou a consulta do perfil. Verifique as políticas RLS."
+    if isinstance(erro, KeyError):
+        return "Configuração ausente em Secrets: confira SUPABASE_URL e SUPABASE_ANON_KEY."
+    return f"Falha no login ({nome}). Consulte os logs do Streamlit; não compartilhe chaves nem tokens."
+
+
 def tela_login():
-    _, meio, _ = st.columns([1, 1.4, 1])
-    with meio:
-        mostrar_logo(140)
-        st.title("Sistema de Gestão Patrimonial")
-        st.markdown("**IPB - CABO**")
-        st.caption("Acesso restrito a usuários autorizados")
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+    _, centro, _ = st.columns([1, 1.5, 1])
+    with centro:
+        _, logo_col, _ = st.columns([1, 1, 1])
+        with logo_col:
+            mostrar_logo(130)
+        st.markdown("""
+        <h1 style="text-align:center;font-size:clamp(1.7rem,3vw,2.2rem);margin:8px 0;">Sistema de Gestão Patrimonial</h1>
+        <p style="text-align:center;font-weight:750;letter-spacing:3px;color:#c9ebd9 !important;">IPB - CABO</p>
+        <p style="text-align:center;color:#b9d7c8 !important;">Acesso restrito a usuários autorizados</p>
+        """, unsafe_allow_html=True)
         with st.form("login"):
-            email = st.text_input("E-mail")
-            senha = st.text_input("Senha", type="password")
+            email = st.text_input("E-mail", placeholder="Digite seu e-mail")
+            senha = st.text_input("Senha", type="password", placeholder="Digite sua senha")
             enviar = st.form_submit_button("Entrar no sistema", type="primary", use_container_width=True)
         if enviar:
             if not email.strip() or not senha:
-                st.warning("Informe e-mail e senha.")
+                st.warning("Informe o e-mail e a senha.")
             else:
                 try:
                     autenticar(email.strip(), senha)
                     st.rerun()
-                except PermissionError:
-                    st.error("Sua conta não está autorizada ou está inativa.")
-              except Exception as erro:
-    import logging
+                except Exception as erro:
+                    # Não registrar a exceção completa do provedor de autenticação:
+                    # algumas bibliotecas podem incluir dados sensíveis na mensagem.
+                    LOG.warning("Login falhou: %s", type(erro).__name__)
+                    st.error(explicar_erro_login(erro))
+    st.stop()
 
-    logging.exception("Falha no processo de login")
 
-    st.error(
-        "Não foi possível entrar. "
-        "Consulte os logs do aplicativo para identificar a causa."
+def listar_referencias(tabela):
+    resposta = (
+        api_usuario(st.session_state["access_token"])
+        .from_(tabela).select("id,nome,ativo")
+        .eq("ativo", True).order("nome").execute()
     )
-
-
-def listar_opcoes(tabela):
-    dados = api_usuario().from_(tabela).select("id,nome,ativo").eq("ativo", True).order("nome").execute().data or []
-    return {item["nome"]: item["id"] for item in dados}
+    return resposta.data or []
 
 
 def listar_patrimonios():
-    # Paginação evita o limite padrão de 1000 linhas por resposta.
-    todos = []
-    inicio = 0
+    # A paginação evita o limite padrão de 1.000 registros do PostgREST.
+    itens = []
+    pagina = 0
+    tamanho = 500
     while True:
-        lote = (api_usuario().from_("patrimonios")
-                .select("id,codigo,descricao,categoria_id,localizacao_id,marca,modelo,numero_serie,data_aquisicao,valor_aquisicao,estado_conservacao,situacao,observacoes,criado_em")
-                .order("codigo").range(inicio, inicio + 499).execute().data or [])
-        todos.extend(lote)
-        if len(lote) < 500:
+        resposta = (
+            api_usuario(st.session_state["access_token"])
+            .from_("patrimonios")
+            .select("id,codigo,descricao,categoria_id,localizacao_id,marca,modelo,numero_serie,data_aquisicao,valor_aquisicao,estado_conservacao,situacao,observacoes,criado_em,atualizado_em")
+            .order("codigo")
+            .range(pagina * tamanho, (pagina + 1) * tamanho - 1)
+            .execute()
+        )
+        lote = resposta.data or []
+        itens.extend(lote)
+        if len(lote) < tamanho:
             break
-        inicio += 500
-    return todos
+        pagina += 1
+    return itens
 
 
-def texto_ou_nulo(valor):
-    return valor.strip() or None
+def opcoes_referencia(itens):
+    return {item["id"]: item["nome"] for item in itens}
 
 
-def valor_monetario(valor):
-    valor = valor.strip().replace("R$", "").replace(" ", "")
-    if not valor:
+def id_opcional(valor):
+    return valor if valor else None
+
+
+def data_opcional(valor):
+    return valor.isoformat() if valor else None
+
+
+def decimal_opcional(valor_texto):
+    texto = valor_texto.strip()
+    if not texto:
         return None
-    if "," in valor:
-        valor = valor.replace(".", "").replace(",", ".")
-    numero = Decimal(valor)
+    texto = texto.replace(".", "").replace(",", ".") if "," in texto else texto
+    try:
+        numero = Decimal(texto)
+    except InvalidOperation as exc:
+        raise ValueError("Valor de aquisição inválido. Exemplo: 1500,00") from exc
     if not numero.is_finite() or numero < 0:
-        raise InvalidOperation
-    return str(numero.quantize(Decimal("0.01")))
+        raise ValueError("O valor de aquisição deve ser um número positivo ou zero.")
+    return float(numero)
 
 
-def formulario_patrimonio(categorias, localizacoes, atual=None):
-    editando = atual is not None
-    cat_por_id = {v: k for k, v in categorias.items()}
-    loc_por_id = {v: k for k, v in localizacoes.items()}
-    lista_cat = ["Não informada"] + list(categorias)
-    lista_loc = ["Não informada"] + list(localizacoes)
-    cat_atual = cat_por_id.get((atual or {}).get("categoria_id"), "Não informada")
-    loc_atual = loc_por_id.get((atual or {}).get("localizacao_id"), "Não informada")
-    with st.form("editar_bem" if editando else "novo_bem", clear_on_submit=not editando):
-        if editando:
-            st.caption("Código patrimonial: " + atual["codigo"] + " (não pode ser alterado)")
+def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
+    edicao = registro is not None
+    categorias_map = opcoes_referencia(categorias)
+    locais_map = opcoes_referencia(localizacoes)
+    cat_ids = [""] + list(categorias_map)
+    loc_ids = [""] + list(locais_map)
+    estados = ["", "Novo", "Bom", "Regular", "Ruim"]
+    estado_atual = (registro or {}).get("estado_conservacao") or ""
+    if estado_atual not in estados:
+        estados.append(estado_atual)
+    valor_atual = (registro or {}).get("valor_aquisicao")
+    valor_str = "" if valor_atual is None else str(valor_atual)
+    data_atual = (registro or {}).get("data_aquisicao")
+    try:
+        data_inicial = date.fromisoformat(data_atual) if data_atual else None
+    except (TypeError, ValueError):
+        data_inicial = None
+
+    with st.form(chave):
+        if edicao:
+            st.caption(f"Código patrimonial: {registro['codigo']} (não pode ser alterado)")
         else:
-            st.caption("Código gerado automaticamente pelo Supabase ao salvar.")
-        descricao = st.text_input("Descrição do patrimônio *", value=(atual or {}).get("descricao") or "")
+            st.caption("Código patrimonial: gerado automaticamente ao salvar (IPB-000001, ...)")
+        descricao = st.text_input("Descrição do patrimônio *", value=(registro or {}).get("descricao") or "", max_chars=300)
         c1, c2 = st.columns(2)
         with c1:
-            categoria = st.selectbox("Categoria", lista_cat, index=lista_cat.index(cat_atual))
+            categoria_atual = (registro or {}).get("categoria_id") or ""
+            categoria = st.selectbox(
+                "Categoria", cat_ids,
+                index=cat_ids.index(categoria_atual) if categoria_atual in cat_ids else 0,
+                format_func=lambda x: categorias_map.get(x, "Não informada"),
+            )
+            marca = st.text_input("Marca", value=(registro or {}).get("marca") or "")
+            numero_serie = st.text_input("Número de série", value=(registro or {}).get("numero_serie") or "")
+            estado = st.selectbox("Estado de conservação", estados, index=estados.index(estado_atual))
         with c2:
-            localizacao = st.selectbox("Localização", lista_loc, index=lista_loc.index(loc_atual))
-        c3, c4 = st.columns(2)
-        with c3:
-            marca = st.text_input("Marca", value=(atual or {}).get("marca") or "")
-            numero_serie = st.text_input("Número de série", value=(atual or {}).get("numero_serie") or "")
-        with c4:
-            modelo = st.text_input("Modelo", value=(atual or {}).get("modelo") or "")
-            conservacao_atual = (atual or {}).get("estado_conservacao") or "Não informado"
-            estados = ["Não informado", "Novo", "Bom", "Regular", "Ruim"]
-            if conservacao_atual not in estados:
-                estados.append(conservacao_atual)
-            conservacao = st.selectbox("Estado de conservação", estados, index=estados.index(conservacao_atual))
-        c5, c6 = st.columns(2)
-        with c5:
-            data_original = (atual or {}).get("data_aquisicao")
-            informar_data = st.checkbox("Informar data de aquisição", value=bool(data_original))
-            data_aquisicao = st.date_input("Data de aquisição", value=date.fromisoformat(data_original) if data_original else date.today(), disabled=not informar_data)
-        with c6:
-            valor_original = (atual or {}).get("valor_aquisicao")
-            valor = st.text_input("Valor de aquisição (R$)", value=str(valor_original).replace(".", ",") if valor_original is not None else "", placeholder="Ex.: 1.250,00")
-        observacoes = st.text_area("Observações", value=(atual or {}).get("observacoes") or "")
-        enviado = st.form_submit_button("Salvar alterações" if editando else "Cadastrar patrimônio", type="primary", use_container_width=True)
-    if not enviado:
+            local_atual = (registro or {}).get("localizacao_id") or ""
+            local = st.selectbox(
+                "Localização", loc_ids,
+                index=loc_ids.index(local_atual) if local_atual in loc_ids else 0,
+                format_func=lambda x: locais_map.get(x, "Não informada"),
+            )
+            modelo = st.text_input("Modelo", value=(registro or {}).get("modelo") or "")
+            data_aquisicao = st.date_input("Data de aquisição", value=data_inicial, format="DD/MM/YYYY")
+            valor_aquisicao = st.text_input("Valor de aquisição (R$)", value=valor_str, placeholder="Ex.: 1500,00")
+        observacoes = st.text_area("Observações", value=(registro or {}).get("observacoes") or "")
+        if edicao:
+            st.caption("A situação (disponível/emprestado/manutenção) não é alterada aqui, para preservar o fluxo de empréstimos.")
+        enviar = st.form_submit_button(
+            "Salvar alterações" if edicao else "Cadastrar patrimônio",
+            type="primary", use_container_width=True,
+        )
+    if not enviar:
         return
     if not descricao.strip():
-        st.warning("Preencha a descrição do patrimônio.")
+        st.error("Informe a descrição do patrimônio.")
         return
     try:
-        valor_final = valor_monetario(valor)
-    except (InvalidOperation, ValueError):
-        st.error("Valor de aquisição inválido. Use, por exemplo, 1250,00.")
-        return
-    dados = {
-        "descricao": descricao.strip(), "categoria_id": categorias.get(categoria),
-        "localizacao_id": localizacoes.get(localizacao), "marca": texto_ou_nulo(marca),
-        "modelo": texto_ou_nulo(modelo), "numero_serie": texto_ou_nulo(numero_serie),
-        "data_aquisicao": data_aquisicao.isoformat() if informar_data else None,
-        "valor_aquisicao": valor_final,
-        "estado_conservacao": None if conservacao == "Não informado" else conservacao,
-        "observacoes": texto_ou_nulo(observacoes),
-    }
-    try:
-        if editando:
-            dados["atualizado_por"] = st.session_state["user_id"]
-            resultado = (api_usuario().from_("patrimonios").update(dados)
-                         .eq("id", atual["id"]).select("id,codigo").execute().data or [])
-            if not resultado:
+        payload = {
+            "descricao": descricao.strip(),
+            "categoria_id": id_opcional(categoria),
+            "localizacao_id": id_opcional(local),
+            "marca": marca.strip() or None,
+            "modelo": modelo.strip() or None,
+            "numero_serie": numero_serie.strip() or None,
+            "data_aquisicao": data_opcional(data_aquisicao),
+            "valor_aquisicao": decimal_opcional(valor_aquisicao),
+            "estado_conservacao": estado or None,
+            "observacoes": observacoes.strip() or None,
+            "atualizado_por": st.session_state["user_id"],
+        }
+        api = api_usuario(st.session_state["access_token"])
+        if edicao:
+            payload["atualizado_em"] = "now()"  # substituído abaixo por ISO UTC
+            from datetime import datetime, timezone
+            payload["atualizado_em"] = datetime.now(timezone.utc).isoformat()
+            resposta = api.from_("patrimonios").update(payload).eq("id", registro["id"]).execute()
+            if not resposta.data:
                 st.error("Nenhum registro foi atualizado. Verifique suas permissões RLS.")
                 return
             st.success("Patrimônio atualizado com sucesso!")
         else:
-            dados["criado_por"] = st.session_state["user_id"]
-            # A trigger SQL atribui o código; não enviar código manual.
-            resultado = api_usuario().from_("patrimonios").insert(dados).select("id,codigo").execute().data or []
-            if not resultado:
-                st.error("O banco não retornou o patrimônio cadastrado. Confira as políticas RLS.")
+            # O trigger BEFORE INSERT do Supabase substitui este código temporário.
+            # A coluna codigo é NOT NULL e não tem DEFAULT no esquema atual.
+            payload["codigo"] = "PENDENTE"
+            payload["criado_por"] = st.session_state["user_id"]
+            resposta = api.from_("patrimonios").insert(payload).execute()
+            if not resposta.data:
+                st.error("O Supabase não retornou o patrimônio cadastrado.")
                 return
-            st.success("Patrimônio cadastrado! Código: " + resultado[0]["codigo"])
-            st.session_state["ultimo_codigo"] = resultado[0]["codigo"]
-    except Exception as exc:
-        st.error("Não foi possível salvar. Confira permissões, campos e se o SQL de numeração já foi executado.")
-        with st.expander("Detalhes técnicos do erro"):
-            st.code(str(exc))
+            codigo = resposta.data[0].get("codigo", "")
+            if codigo == "PENDENTE":
+                st.warning("Cadastro realizado, mas o gatilho de numeração não atribuiu um código. Verifique o trigger no Supabase.")
+            else:
+                st.success(f"Patrimônio cadastrado! Código: {codigo}")
+        st.session_state["patrimonio_atualizado"] = True
+    except ValueError as erro:
+        st.error(str(erro))
+    except Exception as erro:
+        LOG.warning("Falha ao salvar patrimônio: %s", type(erro).__name__)
+        st.error(f"Não foi possível salvar ({type(erro).__name__}). Confira as permissões e as regras do Supabase.")
+
+
+def pagina_patrimonios(papel):
+    st.header("Patrimônios")
+    st.caption("Cadastro, consulta e edição de bens da igreja")
+    try:
+        categorias = listar_referencias("categorias")
+        locais = listar_referencias("localizacoes")
+        registros = listar_patrimonios()
+    except Exception as erro:
+        LOG.warning("Falha na consulta de patrimônios: %s", type(erro).__name__)
+        st.error(f"Não foi possível consultar os dados ({type(erro).__name__}). Confira as políticas RLS e a conexão.")
+        return
+
+    pode_gerenciar = papel in ("admin", "gestor")
+    abas = ["Consultar patrimônios"] + (["Cadastrar patrimônio", "Editar patrimônio"] if pode_gerenciar else [])
+    tabs = st.tabs(abas)
+    with tabs[0]:
+        busca = st.text_input("Pesquisar", placeholder="Código, descrição, marca, modelo ou número de série")
+        categorias_map = opcoes_referencia(categorias)
+        locais_map = opcoes_referencia(locais)
+        categorias_filtro = ["Todas"] + sorted(set(categorias_map.values()))
+        situacoes_filtro = ["Todas"] + sorted({r.get("situacao") or "" for r in registros if r.get("situacao")})
+        fc, fs = st.columns(2)
+        with fc:
+            filtro_categoria = st.selectbox("Filtrar categoria", categorias_filtro)
+        with fs:
+            filtro_situacao = st.selectbox("Filtrar situação", situacoes_filtro)
+        filtrados = []
+        for r in registros:
+            campos = " ".join(str(r.get(k) or "") for k in ("codigo", "descricao", "marca", "modelo", "numero_serie"))
+            if busca.casefold() not in campos.casefold():
+                continue
+            if filtro_categoria != "Todas" and categorias_map.get(r.get("categoria_id")) != filtro_categoria:
+                continue
+            if filtro_situacao != "Todas" and r.get("situacao") != filtro_situacao:
+                continue
+            filtrados.append({
+                "Código": r.get("codigo"),
+                "Descrição": r.get("descricao"),
+                "Categoria": categorias_map.get(r.get("categoria_id"), "—"),
+                "Localização": locais_map.get(r.get("localizacao_id"), "—"),
+                "Marca": r.get("marca") or "—",
+                "Situação": r.get("situacao") or "—",
+                "Conservação": r.get("estado_conservacao") or "—",
+            })
+        st.caption(f"{len(filtrados)} patrimônio(s) encontrado(s)")
+        st.dataframe(filtrados, use_container_width=True, hide_index=True)
+    if pode_gerenciar:
+        with tabs[1]:
+            formulario_patrimonio("form_cadastro_patrimonio", categorias, locais)
+        with tabs[2]:
+            if not registros:
+                st.info("Ainda não existem patrimônios cadastrados.")
+            else:
+                por_id = {r["id"]: r for r in registros}
+                selecionado = st.selectbox(
+                    "Selecione o patrimônio para editar",
+                    list(por_id),
+                    format_func=lambda id_: f"{por_id[id_].get('codigo', '')} — {por_id[id_].get('descricao', '')}",
+                )
+                formulario_patrimonio("form_edicao_" + selecionado, categorias, locais, por_id[selecionado])
+    if st.session_state.pop("patrimonio_atualizado", False):
+        st.caption("Para atualizar a tabela de consulta, clique em Patrimônios novamente no menu.")
+
+
+def painel_principal(nome):
+    st.header("Painel principal")
+    st.success(f"Bem-vindo(a), {nome}!")
+    try:
+        registros = listar_patrimonios()
+    except Exception as erro:
+        LOG.warning("Falha ao carregar indicadores: %s", type(erro).__name__)
+        st.warning("Não foi possível carregar os indicadores do Supabase.")
+        return
+    contagens = {
+        "Patrimônios": len(registros),
+        "Disponíveis": sum(r.get("situacao") == "disponivel" for r in registros),
+        "Emprestados": sum(r.get("situacao") == "emprestado" for r in registros),
+        "Em manutenção": sum(r.get("situacao") == "manutencao" for r in registros),
+    }
+    for coluna, (titulo, valor) in zip(st.columns(4), contagens.items()):
+        with coluna:
+            st.metric(titulo, valor)
+    st.caption("Indicadores calculados a partir dos registros do Supabase.")
 
 
 if not st.session_state.get("access_token"):
     tela_login()
 if not validar_sessao():
     limpar_sessao()
-    st.rerun()
+    st.warning("Sua sessão expirou. Entre novamente.")
+    tela_login()
 
 perfil = st.session_state["profile"]
-papel = perfil["papel"]
+papel = perfil.get("papel") or "consulta"
+nome = perfil.get("nome_completo") or "Usuário"
+
 with st.sidebar:
     mostrar_logo(105)
     st.header("IPB - CABO")
     st.caption("Gestão Patrimonial")
     st.divider()
-    st.write("**Usuário:**", perfil.get("nome_completo") or "Usuário")
-    st.caption("Perfil: " + str(papel).upper())
+    st.write("**Usuário:**", nome)
+    st.caption("Perfil: " + papel.upper())
     st.divider()
     paginas = ["Painel principal", "Patrimônios", "Empréstimos", "Devoluções", "Relatórios"]
     if papel == "admin":
@@ -279,68 +451,23 @@ with st.sidebar:
         limpar_sessao()
         st.rerun()
 
-st.title("Sistema de Gestão Patrimonial IPB - CABO")
-st.caption("Controle e administração dos bens patrimoniais")
-st.divider()
+st.markdown("""
+<div class="ipb-banner">
+<h1>Sistema de Gestão Patrimonial IPB - CABO</h1>
+<p>Controle e administração dos bens patrimoniais</p>
+</div>
+""", unsafe_allow_html=True)
 
 if pagina == "Painel principal":
-    st.header("Painel principal")
-    st.success(f"Bem-vindo(a), {perfil.get('nome_completo') or 'usuário'}!")
-    try:
-        bens = listar_patrimonios()
-        indicadores = [
-            ("Patrimônios", len(bens)),
-            ("Disponíveis", sum(x.get("situacao") == "disponivel" for x in bens)),
-            ("Emprestados", sum(x.get("situacao") == "emprestado" for x in bens)),
-            ("Em manutenção", sum(str(x.get("situacao", "")).startswith("manut") for x in bens)),
-        ]
-        for coluna, (nome, valor) in zip(st.columns(4), indicadores):
-            with coluna:
-                st.metric(nome, valor)
-    except Exception:
-        st.warning("Não foi possível carregar os indicadores. Verifique a conexão e as permissões.")
+    painel_principal(nome)
 elif pagina == "Patrimônios":
-    st.header("Patrimônios")
-    try:
-        categorias = listar_opcoes("categorias")
-        localizacoes = listar_opcoes("localizacoes")
-        bens = listar_patrimonios()
-    except Exception as exc:
-        st.error("Não foi possível consultar os dados do Supabase.")
-        with st.expander("Detalhes técnicos"):
-            st.code(str(exc))
-        st.stop()
-    abas = st.tabs(["Consultar patrimônios", "Cadastrar patrimônio", "Editar patrimônio"])
-    with abas[0]:
-        busca = st.text_input("Pesquisar por código, descrição, marca ou número de série", key="busca_bens")
-        filtro = st.selectbox("Situação", ["Todas"] + sorted({x.get("situacao") for x in bens if x.get("situacao")}))
-        filtrados = [x for x in bens if (filtro == "Todas" or x.get("situacao") == filtro) and
-                     (not busca or busca.lower() in " ".join(str(x.get(k) or "") for k in ("codigo", "descricao", "marca", "numero_serie")).lower())]
-        st.caption(f"{len(filtrados)} patrimônio(s) encontrado(s)")
-        nomes_cat = {v: k for k, v in categorias.items()}
-        nomes_loc = {v: k for k, v in localizacoes.items()}
-        linhas = [{"Código": x["codigo"], "Descrição": x["descricao"], "Categoria": nomes_cat.get(x.get("categoria_id"), "—"),
-                   "Localização": nomes_loc.get(x.get("localizacao_id"), "—"), "Situação": x.get("situacao"),
-                   "Marca": x.get("marca") or "—"} for x in filtrados]
-        st.dataframe(linhas, use_container_width=True, hide_index=True)
-    with abas[1]:
-        st.subheader("Cadastrar novo patrimônio")
-        st.caption("Disponível para usuários com permissão de gestor. O Supabase valida cada gravação.")
-        formulario_patrimonio(categorias, localizacoes)
-    with abas[2]:
-        st.subheader("Editar patrimônio existente")
-        if not bens:
-            st.info("Ainda não existem patrimônios cadastrados.")
-        else:
-            por_codigo = {f"{x['codigo']} — {x['descricao']}": x for x in bens}
-            escolhido = st.selectbox("Selecione o patrimônio", list(por_codigo), key="selecionar_edicao")
-            formulario_patrimonio(categorias, localizacoes, por_codigo[escolhido])
+    pagina_patrimonios(papel)
 elif pagina == "Usuários":
     if papel != "admin":
         st.error("Acesso restrito ao administrador.")
         st.stop()
     st.header("Administração de usuários")
-    st.info("Módulo em desenvolvimento.")
+    st.info("Módulo em desenvolvimento. Usuários ainda não podem ser criados nesta tela.")
 else:
     st.header(pagina)
     st.info("Módulo em desenvolvimento. Nenhum dado será alterado nesta tela.")
