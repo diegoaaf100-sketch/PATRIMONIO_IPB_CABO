@@ -1182,6 +1182,90 @@ def pagina_relatorios():
         st.download_button("Baixar relatório em Excel", data=excel, file_name="relatorio_ipb_cabo.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
+
+# ==========================================
+# ADMINISTRACAO DE USUARIOS
+# ==========================================
+
+def funcao_admin_ipb(acao, **campos):
+    import json
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError
+    url = st.secrets["SUPABASE_URL"].rstrip("/") + "/functions/v1/ipb-usuarios"
+    payload = json.dumps({"acao": acao, **campos}).encode("utf-8")
+    req = Request(url, data=payload, method="POST", headers={
+        "Content-Type": "application/json",
+        "apikey": st.secrets["SUPABASE_ANON_KEY"],
+        "Authorization": "Bearer " + st.session_state["access_token"],
+    })
+    try:
+        with urlopen(req, timeout=35) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except HTTPError as exc:
+        try:
+            msg = json.loads(exc.read().decode("utf-8")).get("erro", "Falha na operacao")
+        except Exception:
+            msg = "Falha na operacao"
+        raise ValueError(msg) from None
+
+
+def pagina_usuarios_ipb(papel):
+    st.header("Administração de usuários")
+    st.caption("Convites, permissões e controle de acesso ao sistema")
+    if papel != "admin":
+        st.error("Acesso exclusivo do administrador.")
+        return
+    if st.session_state.pop("usuarios_sucesso", None):
+        st.success("Operação realizada com sucesso.")
+    try:
+        resposta = api_usuario(st.session_state["access_token"]).from_("perfis").select("id,nome_completo,papel,ativo").order("nome_completo").execute()
+        perfis = resposta.data or []
+    except Exception as exc:
+        st.error("Não foi possível consultar os usuários: " + type(exc).__name__)
+        return
+    st.metric("Usuários cadastrados", len(perfis))
+    st.dataframe([{"Nome": x.get("nome_completo") or "—", "Perfil": x.get("papel") or "—", "Situação": "Ativo" if x.get("ativo") else "Bloqueado", "ID": x["id"]} for x in perfis], use_container_width=True, hide_index=True)
+    abas = st.tabs(["Convidar usuário", "Alterar permissões / bloquear"])
+    with abas[0]:
+        st.info("O usuário receberá um convite para configurar o acesso por e-mail. Configure o envio de e-mails do Supabase Auth para uso em produção.")
+        with st.form("convite_usuario_ipb"):
+            nome = st.text_input("Nome completo *")
+            email = st.text_input("E-mail *")
+            perfil_novo = st.selectbox("Perfil de acesso", ["consulta", "gestor", "admin"], format_func=lambda x: {"consulta":"Consulta", "gestor":"Gestor", "admin":"Administrador"}[x])
+            enviar = st.form_submit_button("Enviar convite", type="primary", use_container_width=True)
+        if enviar:
+            if not nome.strip() or "@" not in email or not email.strip():
+                st.error("Informe nome e e-mail válidos.")
+            else:
+                try:
+                    funcao_admin_ipb("criar", nome=nome.strip(), email=email.strip().lower(), papel=perfil_novo)
+                except Exception as exc:
+                    st.error(str(exc))
+                else:
+                    st.success("Convite solicitado com sucesso. Confira o e-mail do destinatário.")
+    with abas[1]:
+        outros = [p for p in perfis if p["id"] != st.session_state["user_id"]]
+        if not outros:
+            st.info("Ainda não há outros usuários para administrar.")
+        else:
+            mapa = {p["id"]: p for p in outros}
+            selecionado = st.selectbox("Usuário", list(mapa), format_func=lambda i: f"{mapa[i].get('nome_completo') or 'Sem nome'} — {mapa[i].get('papel')}")
+            atual = mapa[selecionado]
+            papeis = ["consulta", "gestor", "admin"]
+            with st.form("editar_usuario_ipb_" + selecionado):
+                papel_editado = st.selectbox("Perfil", papeis, index=papeis.index(atual["papel"]) if atual.get("papel") in papeis else 0)
+                ativo = st.checkbox("Usuário ativo", value=bool(atual.get("ativo")))
+                salvar = st.form_submit_button("Salvar alterações", type="primary", use_container_width=True)
+            if salvar:
+                try:
+                    funcao_admin_ipb("alterar", usuario_id=selecionado, papel=papel_editado, ativo=ativo)
+                except Exception as exc:
+                    st.error(str(exc))
+                else:
+                    st.session_state["usuarios_sucesso"] = True
+                    st.rerun()
+    st.caption("Por segurança, sua própria conta não pode ser bloqueada ou rebaixada nesta tela. Alterações de acesso entram em vigor nas próximas consultas autorizadas pelo banco.")
+
 def painel_principal(nome):
     st.header("Painel principal")
     st.success(f"Bem-vindo(a), {nome}!")
@@ -1256,8 +1340,7 @@ elif pagina == "Usuários":
     if papel != "admin":
         st.error("Acesso restrito ao administrador.")
         st.stop()
-    st.header("Administração de usuários")
-    st.info("Módulo em desenvolvimento. Usuários ainda não podem ser criados nesta tela.")
+    pagina_usuarios_ipb(papel)
 else:
     st.header(pagina)
     st.info("Módulo em desenvolvimento. Nenhum dado será alterado nesta tela.")
