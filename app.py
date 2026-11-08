@@ -144,7 +144,7 @@ button[data-testid="stBaseButton-headerNoPadding"]:has(svg[data-testid="stIconMa
     [data-testid="stSidebarHeader"] button { min-width: 46px !important; min-height: 46px !important; }
 }
 
-.ipb-banner .ipb-igreja-nome { font-size: clamp(1rem, 1.65vw, 1.35rem) !important; font-weight: 600 !important; color: #e7fff0 !important; margin: 3px 0 5px !important; }
+.ipb-banner .ipb-igreja-nome { font-size: clamp(1.5rem, 3vw, 2.3rem) !important; font-weight: 750 !important; color: #ffffff !important; margin: 0 0 8px !important; line-height:1.18; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1390,9 +1390,12 @@ papel = perfil.get("papel") or "consulta"
 nome = perfil.get("nome_completo") or "Usuário"
 
 with st.sidebar:
-    mostrar_logo(105)
-    st.header("Primeira Igreja Presbiteriana do Cabo")
-    st.caption("Gestão Patrimonial")
+    # Sarça centralizada no painel lateral, usando a imagem original.
+    col_esq, col_logo, col_dir = st.columns([1, 1.5, 1])
+    with col_logo:
+        mostrar_logo(105)
+    st.markdown('<h2 style="text-align:center; color:#ffffff; font-size:1.65rem; margin:0.35rem 0 0.1rem;">IPB - CABO</h2>', unsafe_allow_html=True)
+    st.markdown('<p style="text-align:center; color:#b9dccc; margin:0 0 1rem;">Gestão Patrimonial</p>', unsafe_allow_html=True)
     st.divider()
     st.write("**Usuário:**", nome)
     st.caption("Perfil: " + papel.upper())
