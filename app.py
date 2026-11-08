@@ -563,7 +563,13 @@ def pagina_emprestimos(papel, nome_usuario):
                         if not isinstance(resultado, dict) or "numero" not in resultado:
                             raise ValueError("O Supabase não confirmou o número do empréstimo")
                     except Exception as erro:
-                        LOG.warning("Falha ao registrar empréstimo: %s", type(erro).__name__)
+                        LOG.error(
+    "Falha ao registrar empréstimo: tipo=%s, codigo=%s, mensagem=%s, detalhes=%s",
+    type(erro).__name__,
+    getattr(erro, "code", None),
+    getattr(erro, "message", None),
+    getattr(erro, "details", None),
+)
                         st.error(f"Não foi possível confirmar o empréstimo ({type(erro).__name__}). Confira a lista antes de tentar novamente e verifique se o SQL foi executado.")
                     else:
                         st.session_state["mensagem_emprestimo"] = f"Empréstimo nº {resultado['numero']} registrado com sucesso!"
