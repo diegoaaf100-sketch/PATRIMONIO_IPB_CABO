@@ -1,4 +1,5 @@
 import logging
+import base64
 import uuid
 import mimetypes
 from urllib.request import Request, urlopen
@@ -54,6 +55,28 @@ hr { border-color: #37715d !important; }
 .ipb-banner h1 { font-size: clamp(1.5rem, 3vw, 2.3rem); margin: 0 0 5px; }
 .ipb-banner p { margin: 0; color: #cce7d8 !important; }
 @media(max-width: 768px) { [data-testid="stForm"] { padding: 12px; } .ipb-banner { padding: 15px; } }
+
+.ipb-banner {display:flex; align-items:center; gap:23px; min-height:150px; background:linear-gradient(110deg,#075239,#10543d 75%,#0a7651); border:1px solid #5ca57f; box-shadow:0 8px 25px rgba(0,0,0,.12);}
+.ipb-banner-logo {width:112px; height:112px; object-fit:contain; flex-shrink:0; padding-right:18px; border-right:2px solid #b8dfc8;}
+.ipb-banner-copy {min-width:0;}
+.ipb-banner-copy h1 {line-height:1.18;}
+@media(max-width:768px) {.ipb-banner{gap:12px;min-height:100px}.ipb-banner-logo{width:72px;height:72px;padding-right:10px}.ipb-banner-copy h1{font-size:1.24rem}}
+/* O controle recolhido é um botão do cabeçalho, não o menu de três pontos. */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="stSidebarCollapseButton"] {z-index:1000 !important;}
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="stSidebarCollapseButton"] button,
+button[data-testid="stBaseButton-headerNoPadding"]:has(svg[data-testid="stIconMaterial"]),
+[data-testid="stSidebarHeader"] button {
+  background:#08744f !important; border:2px solid #b0e6c6 !important;
+  color:#fff !important; border-radius:12px !important;
+  min-width:46px !important; min-height:46px !important;
+  box-shadow:0 3px 12px #001f1670 !important;
+}
+[data-testid="stSidebarCollapsedControl"] button svg,
+[data-testid="stSidebarCollapseButton"] button svg,
+[data-testid="stSidebarHeader"] button svg {stroke:white !important; width:25px !important; height:25px !important;}
+
 
 /* Navegação lateral IPB: mantém a estrutura e a sarça original */
 [data-testid="stSidebar"] [data-testid="stRadio"] > div[role="radiogroup"] {
@@ -1405,12 +1428,30 @@ with st.sidebar:
         limpar_sessao()
         st.rerun()
 
-st.markdown("""
-<div class="ipb-banner">
-<h1>Sistema de Gestão Patrimonial IPB - CABO</h1>
-<p>Controle e administração dos bens patrimoniais</p>
-</div>
-""", unsafe_allow_html=True)
+# Usa a mesma imagem da sarça já utilizada no menu lateral.
+# A imagem é embutida no cabeçalho para manter a posição à esquerda do título.
+logo_html = ""
+if LOGO_PATH.is_file():
+    try:
+        logo_base64 = base64.b64encode(LOGO_PATH.read_bytes()).decode("ascii")
+        extensao_logo = LOGO_PATH.suffix.lower()
+        mime_logo = "image/png" if extensao_logo == ".png" else "image/jpeg"
+        logo_html = (
+            f'<img class="ipb-banner-logo" '
+            f'src="data:{mime_logo};base64,{logo_base64}" '
+            f'alt="Sarça da Igreja Presbiteriana" />'
+        )
+    except OSError:
+        pass
+st.markdown(
+    '<div class="ipb-banner">'
+    + logo_html
+    + '<div class="ipb-banner-copy">'
+    + '<h1>Sistema de Gestão Patrimonial IPB - CABO</h1>'
+    + '<p>Controle e administração dos bens patrimoniais</p>'
+    + '</div></div>',
+    unsafe_allow_html=True,
+)
 
 if pagina == "Painel principal":
     painel_principal(nome)
