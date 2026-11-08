@@ -54,6 +54,73 @@ hr { border-color: #37715d !important; }
 .ipb-banner h1 { font-size: clamp(1.5rem, 3vw, 2.3rem); margin: 0 0 5px; }
 .ipb-banner p { margin: 0; color: #cce7d8 !important; }
 @media(max-width: 768px) { [data-testid="stForm"] { padding: 12px; } .ipb-banner { padding: 15px; } }
+
+/* Navegação lateral IPB: mantém a estrutura e a sarça original */
+[data-testid="stSidebar"] [data-testid="stRadio"] > div[role="radiogroup"] {
+    gap: 7px !important;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label {
+    display: flex !important;
+    align-items: center !important;
+    min-height: 43px !important;
+    padding: 10px 13px !important;
+    border: 1px solid transparent !important;
+    border-radius: 12px !important;
+    background: rgba(255,255,255,.035) !important;
+    transition: background .18s, border-color .18s, transform .18s;
+    cursor: pointer !important;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
+    background: #135a43 !important;
+    border-color: #41866a !important;
+    transform: translateX(2px);
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {
+    background: #176b4c !important;
+    border-color: #62b58a !important;
+    box-shadow: inset 3px 0 0 #b7e9c6 !important;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label [data-testid="stMarkdownContainer"] p {
+    font-size: .93rem !important;
+    font-weight: 550 !important;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) [data-testid="stMarkdownContainer"] p {
+    font-weight: 750 !important;
+}
+/* Esconde apenas o marcador circular, sem desativar a seleção acessível */
+[data-testid="stSidebar"] [data-testid="stRadio"] label [data-baseweb="radio"] > div:first-child {
+    display: none !important;
+}
+/* Botão nativo do Streamlit para abrir/recolher a barra lateral */
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="stSidebarHeader"] button,
+[data-testid="stHeader"] button[kind="header"] {
+    min-width: 43px !important;
+    min-height: 43px !important;
+    border: 1px solid #9bd5b1 !important;
+    border-radius: 12px !important;
+    background: #176b4c !important;
+    color: white !important;
+    box-shadow: 0 3px 12px rgba(0,0,0,.24) !important;
+}
+[data-testid="stSidebarCollapsedControl"] button:hover,
+[data-testid="stSidebarHeader"] button:hover,
+[data-testid="stHeader"] button[kind="header"]:hover {
+    background: #239060 !important;
+    border-color: #e1ffe9 !important;
+}
+[data-testid="stSidebarCollapsedControl"] button svg,
+[data-testid="stSidebarHeader"] button svg,
+[data-testid="stHeader"] button[kind="header"] svg {
+    width: 23px !important;
+    height: 23px !important;
+    stroke: #fff !important;
+}
+@media(max-width:768px) {
+    [data-testid="stSidebarCollapsedControl"] button,
+    [data-testid="stSidebarHeader"] button { min-width: 46px !important; min-height: 46px !important; }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -1267,7 +1334,16 @@ def pagina_usuarios_ipb(papel):
     st.caption("Por segurança, sua própria conta não pode ser bloqueada ou rebaixada nesta tela. Alterações de acesso entram em vigor nas próximas consultas autorizadas pelo banco.")
 
 def painel_principal(nome):
-    st.header("Painel principal")
+    # A mesma sarça do menu lateral, sem duplicar nem trocar a imagem.
+    if LOGO_PATH.is_file():
+        col_logo, col_titulo = st.columns([1, 7], vertical_alignment="center")
+        with col_logo:
+            mostrar_logo(105)
+        with col_titulo:
+            st.header("Painel principal")
+            st.caption("IPB - CABO | Gestão Patrimonial")
+    else:
+        st.header("Painel principal")
     st.success(f"Bem-vindo(a), {nome}!")
     try:
         registros = listar_patrimonios()
@@ -1309,7 +1385,21 @@ with st.sidebar:
     paginas = ["Painel principal", "Patrimônios", "Empréstimos", "Devoluções", "Documentos assinados", "Histórico por patrimônio", "Relatórios"]
     if papel == "admin":
         paginas.append("Usuários")
-    pagina = st.radio("Navegação", paginas, label_visibility="collapsed")
+    icones_menu = {
+        "Painel principal": "▦",
+        "Patrimônios": "▣",
+        "Empréstimos": "↗",
+        "Devoluções": "↙",
+        "Documentos assinados": "▤",
+        "Histórico por patrimônio": "◷",
+        "Relatórios": "▥",
+        "Usuários": "♙",
+    }
+    pagina = st.radio(
+        "Navegação", paginas, label_visibility="collapsed",
+        format_func=lambda item: f"{icones_menu.get(item, '•')}   {item}",
+        key="navegacao_ipb"
+    )
     st.divider()
     if st.button("Sair do sistema", use_container_width=True):
         limpar_sessao()
