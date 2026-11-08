@@ -1,4 +1,9 @@
 import logging
+import uuid
+import mimetypes
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 import time
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -764,6 +769,202 @@ def pagina_devolucoes(papel, nome_usuario):
         st.info("Anexos de recibos assinados serão habilitados após configurar um bucket privado no Supabase Storage.")
 
 
+
+
+# Documentos privados: nunca utilizar a chave service_role no aplicativo.
+BUCKET_RECIBOS = "ipb-recibos"
+TAMANHO_MAXIMO = 10 * 1024 * 1024
+
+
+def requisicao_storage(metodo, caminho, dados=None, tipo=None):
+    base = st.secrets["SUPABASE_URL"].rstrip("/")
+    url = base + "/storage/v1/object/" + BUCKET_RECIBOS + "/" + quote(caminho, safe="/")
+    headers = {
+        "apikey": st.secrets["SUPABASE_ANON_KEY"],
+        "Authorization": "Bearer " + st.session_state["access_token"],
+    }
+    if tipo:
+        headers["Content-Type"] = tipo
+    if metodo == "POST":
+        headers["x-upsert"] = "false"
+    req = Request(url, data=dados, headers=headers, method=metodo)
+    with urlopen(req, timeout=40) as resp:
+        return resp.read()
+
+
+def listar_anexos_ipb(emprestimo_id=None, patrimonio_id=None):
+    consulta = (api_usuario(st.session_state["access_token"])
+                .from_("anexos_ipb")
+                .select("id,emprestimo_id,patrimonio_id,tipo,caminho,nome_arquivo,mime_type,tamanho_bytes,criado_em")
+                .order("criado_em", desc=True).limit(500))
+    if emprestimo_id:
+        consulta = consulta.eq("emprestimo_id", emprestimo_id)
+    if patrimonio_id:
+        consulta = consulta.eq("patrimonio_id", patrimonio_id)
+    return consulta.execute().data or []
+
+
+def pagina_documentos(papel):
+    st.header("Documentos assinados")
+    st.caption("Recibos de empréstimos e devoluções em armazenamento privado")
+    try:
+        emprestimos = listar_emprestimos()
+        bens = listar_patrimonios()
+        pessoas = {p["id"]: p for p in listar_pessoas()}
+    except Exception as erro:
+        st.error(f"Não foi possível carregar os dados ({type(erro).__name__}).")
+        return
+    if not emprestimos:
+        st.info("Ainda não existem empréstimos cadastrados.")
+        return
+    por_id = {e["id"]: e for e in emprestimos}
+    emprestimo_id = st.selectbox("Empréstimo", list(por_id),
+        format_func=lambda i: f"Nº {por_id[i]['numero']} — {pessoas.get(por_id[i]['pessoa_id'], {}).get('nome','—')}")
+    relacionados = []
+    try:
+        resposta = (api_usuario(st.session_state["access_token"])
+                    .from_("itens_emprestimo").select("patrimonio_id")
+                    .eq("emprestimo_id", emprestimo_id).execute())
+        ids = {x["patrimonio_id"] for x in (resposta.data or [])}
+        relacionados = [b for b in bens if b["id"] in ids]
+    except Exception as erro:
+        st.error(f"Falha ao consultar os bens ({type(erro).__name__}).")
+        return
+    if papel in ("admin", "gestor"):
+        st.subheader("Anexar comprovante")
+        with st.form("form_anexo_ipb", clear_on_submit=True):
+            tipo = st.selectbox("Tipo de comprovante", ["emprestimo", "devolucao"],
+                format_func=lambda x: "Recibo de empréstimo" if x == "emprestimo" else "Comprovante de devolução")
+            escolhas = [""] + [b["id"] for b in relacionados]
+            mapa = {b["id"]: b for b in relacionados}
+            patrimonio_id = st.selectbox("Patrimônio vinculado (opcional)", escolhas,
+                format_func=lambda x: "Empréstimo completo (todos os bens)" if not x else f"{mapa[x]['codigo']} — {mapa[x]['descricao']}")
+            arquivo = st.file_uploader("Arquivo assinado (PDF, JPG ou PNG, até 10 MB)", type=["pdf","jpg","jpeg","png"])
+            enviar = st.form_submit_button("Salvar comprovante", type="primary", use_container_width=True)
+        if enviar:
+            if arquivo is None:
+                st.warning("Selecione um arquivo.")
+            else:
+                dados = arquivo.getvalue()
+                extensao = Path(arquivo.name).suffix.lower()
+                mime = {".pdf":"application/pdf", ".jpg":"image/jpeg", ".jpeg":"image/jpeg", ".png":"image/png"}.get(extensao)
+                assinatura = dados[:8]
+                valido = (mime == "application/pdf" and assinatura.startswith(b"%PDF-")) or (mime == "image/png" and assinatura == b"\x89PNG\r\n\x1a\n") or (mime == "image/jpeg" and assinatura[:3] == b"\xff\xd8\xff")
+                if not mime or not valido:
+                    st.error("Formato inválido. Envie um PDF, JPG ou PNG válido.")
+                elif not dados or len(dados) > TAMANHO_MAXIMO:
+                    st.error("O arquivo precisa ter entre 1 byte e 10 MB.")
+                else:
+                    caminho = f"{emprestimo_id}/{uuid.uuid4().hex}{extensao}"
+                    try:
+                        requisicao_storage("POST", caminho, dados, mime)
+                    except Exception as erro:
+                        LOG.warning("Erro ao enviar documento: %s", type(erro).__name__)
+                        st.error("Falha no envio ao Storage. Confira as políticas e o bucket.")
+                    else:
+                        try:
+                            api_usuario(st.session_state["access_token"]).from_("anexos_ipb").insert({
+                                "emprestimo_id": emprestimo_id,
+                                "patrimonio_id": patrimonio_id or None,
+                                "tipo": tipo, "caminho": caminho,
+                                "nome_arquivo": Path(arquivo.name).name[:240],
+                                "mime_type": mime, "tamanho_bytes": len(dados),
+                                "criado_por": st.session_state["user_id"],
+                            }).execute()
+                        except Exception as erro:
+                            LOG.warning("Falha ao registrar anexo: %s", type(erro).__name__)
+                            try:
+                                requisicao_storage("DELETE", caminho)
+                            except Exception:
+                                LOG.warning("Arquivo órfão no Storage após falha no cadastro")
+                            st.error("Arquivo enviado, mas não foi possível registrar o comprovante. Confira as permissões.")
+                        else:
+                            st.success("Comprovante armazenado com sucesso!")
+                            st.rerun()
+    st.subheader("Comprovantes armazenados")
+    try:
+        anexos = listar_anexos_ipb(emprestimo_id=emprestimo_id)
+    except Exception as erro:
+        st.error(f"Não foi possível consultar os comprovantes ({type(erro).__name__}). Execute o SQL primeiro.")
+        return
+    if not anexos:
+        st.info("Nenhum comprovante anexado a este empréstimo.")
+    for a in anexos:
+        b = next((x for x in relacionados if x["id"] == a.get("patrimonio_id")), None)
+        titulo = f"{a['nome_arquivo']} — {a['tipo']} — {b['codigo'] if b else 'Empréstimo completo'}"
+        with st.expander(titulo):
+            st.caption(f"Enviado em {a['criado_em']} • {a['tamanho_bytes']/1024:.0f} KB")
+            if st.button("Carregar documento para baixar", key="abrir_" + a["id"]):
+                try:
+                    st.session_state["anexo_download_" + a["id"]] = requisicao_storage("GET", a["caminho"])
+                except Exception as erro:
+                    st.error(f"Não foi possível acessar o documento ({type(erro).__name__}).")
+            conteudo = st.session_state.get("anexo_download_" + a["id"])
+            if conteudo is not None:
+                st.download_button("Baixar documento", data=conteudo,
+                    file_name=a["nome_arquivo"], mime=a["mime_type"], key="baixar_" + a["id"])
+
+
+def pagina_historico_patrimonio():
+    st.header("Histórico por patrimônio")
+    st.caption("Movimentações de empréstimo e devolução de cada bem")
+    try:
+        bens = listar_patrimonios()
+        emprestimos = listar_emprestimos()
+        pessoas = {p["id"]: p for p in listar_pessoas()}
+    except Exception as erro:
+        st.error(f"Não foi possível consultar os registros ({type(erro).__name__}).")
+        return
+    if not bens:
+        st.info("Não existem patrimônios cadastrados.")
+        return
+    mapa = {b["id"]: b for b in bens}
+    patrimonio_id = st.selectbox("Selecione o patrimônio", list(mapa),
+        format_func=lambda i: f"{mapa[i]['codigo']} — {mapa[i]['descricao']}")
+    bem = mapa[patrimonio_id]
+    st.write(f"**Situação atual:** {bem.get('situacao') or '—'}")
+    try:
+        itens = (api_usuario(st.session_state["access_token"])
+            .from_("itens_emprestimo")
+            .select("emprestimo_id,estado_na_retirada,data_devolucao,estado_na_devolucao,responsavel_devolucao,observacoes")
+            .eq("patrimonio_id", patrimonio_id).execute()).data or []
+        anexos = listar_anexos_ipb(patrimonio_id=patrimonio_id)
+        # Comprovantes de empréstimo completo também aparecem no histórico do bem.
+        emprestimo_ids = {i["emprestimo_id"] for i in itens}
+        for e_id in emprestimo_ids:
+            gerais = listar_anexos_ipb(emprestimo_id=e_id)
+            anexos.extend(a for a in gerais if a.get("patrimonio_id") is None)
+    except Exception as erro:
+        st.error(f"Falha ao consultar o histórico ({type(erro).__name__}).")
+        return
+    por_emprestimo = {e["id"]: e for e in emprestimos}
+    linhas = []
+    for item in itens:
+        e = por_emprestimo.get(item["emprestimo_id"], {})
+        linhas.append({
+            "Empréstimo": e.get("numero", "—"),
+            "Recebedor": pessoas.get(e.get("pessoa_id"), {}).get("nome", "—"),
+            "Retirada": e.get("data_retirada", "—"),
+            "Devolução": item.get("data_devolucao") or "Pendente",
+            "Estado na retirada": item.get("estado_na_retirada") or "—",
+            "Estado na devolução": item.get("estado_na_devolucao") or "—",
+            "Responsável devolução": item.get("responsavel_devolucao") or "—",
+        })
+    st.dataframe(linhas, use_container_width=True, hide_index=True)
+    st.caption(f"{len(linhas)} movimentação(ões) registrada(s)")
+    st.subheader("Comprovantes relacionados")
+    if anexos:
+        vistos = set()
+        for a in anexos:
+            if a["id"] in vistos:
+                continue
+            vistos.add(a["id"])
+            st.write(f"• {a['nome_arquivo']} ({a['tipo']}) — empréstimo {por_emprestimo.get(a['emprestimo_id'],{}).get('numero','—')}")
+        st.caption("Para baixar os documentos, acesse a aba Documentos assinados.")
+    else:
+        st.info("Nenhum comprovante relacionado a este patrimônio.")
+
+
 def painel_principal(nome):
     st.header("Painel principal")
     st.success(f"Bem-vindo(a), {nome}!")
@@ -804,7 +1005,7 @@ with st.sidebar:
     st.write("**Usuário:**", nome)
     st.caption("Perfil: " + papel.upper())
     st.divider()
-    paginas = ["Painel principal", "Patrimônios", "Empréstimos", "Devoluções", "Relatórios"]
+    paginas = ["Painel principal", "Patrimônios", "Empréstimos", "Devoluções", "Documentos assinados", "Histórico por patrimônio", "Relatórios"]
     if papel == "admin":
         paginas.append("Usuários")
     pagina = st.radio("Navegação", paginas, label_visibility="collapsed")
@@ -828,6 +1029,10 @@ elif pagina == "Empréstimos":
     pagina_emprestimos(papel, nome)
 elif pagina == "Devoluções":
     pagina_devolucoes(papel, nome)
+elif pagina == "Documentos assinados":
+    pagina_documentos(papel)
+elif pagina == "Histórico por patrimônio":
+    pagina_historico_patrimonio()
 elif pagina == "Usuários":
     if papel != "admin":
         st.error("Acesso restrito ao administrador.")
