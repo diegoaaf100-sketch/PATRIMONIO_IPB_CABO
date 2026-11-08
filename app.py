@@ -625,6 +625,145 @@ def pagina_emprestimos(papel, nome_usuario):
                 LOG.warning("Falha ao gerar recibo: %s", type(erro).__name__)
                 st.error(f"Não foi possível gerar o recibo ({type(erro).__name__}).")
 
+
+
+def listar_itens_devolucao(emprestimo_id):
+    resposta = (api_usuario(st.session_state["access_token"])
+        .from_("itens_emprestimo")
+        .select("id,emprestimo_id,patrimonio_id,data_devolucao,estado_na_retirada,estado_na_devolucao,responsavel_devolucao,observacoes")
+        .eq("emprestimo_id", emprestimo_id).execute())
+    return resposta.data or []
+
+
+def pagina_devolucoes(papel, nome_usuario):
+    st.header("Devoluções")
+    st.caption("Devolução total ou parcial, com histórico por patrimônio")
+    pode_gerenciar = papel in ("admin", "gestor")
+    try:
+        emprestimos = listar_emprestimos()
+        pessoas = {p["id"]: p for p in listar_pessoas()}
+        bens = {p["id"]: p for p in listar_patrimonios()}
+    except Exception as erro:
+        LOG.warning("Falha ao consultar devoluções: %s", type(erro).__name__)
+        st.error("Não foi possível carregar as devoluções. Confira a conexão e as permissões.")
+        return
+
+    if st.session_state.get("mensagem_devolucao"):
+        st.success(st.session_state.pop("mensagem_devolucao"))
+
+    ativos = [e for e in emprestimos if e.get("status") == "ativo"]
+    abas = ["Empréstimos pendentes", "Histórico de devoluções"]
+    if pode_gerenciar:
+        abas.insert(0, "Registrar devolução")
+    aba_pendente = st.session_state.pop("devolucao_aba_pendente", None)
+    if aba_pendente in abas:
+        st.session_state["devolucao_aba"] = aba_pendente
+    aba = st.radio("Área de devoluções", abas, horizontal=True, key="devolucao_aba")
+
+    if aba == "Empréstimos pendentes":
+        linhas = [{"Empréstimo": e["numero"],
+                   "Recebedor": pessoas.get(e["pessoa_id"], {}).get("nome", "—"),
+                   "Retirada": e.get("data_retirada"),
+                   "Previsão": e.get("data_prevista_devolucao") or "—"}
+                  for e in ativos]
+        st.caption(f"{len(linhas)} empréstimo(s) ativo(s)")
+        st.dataframe(linhas, use_container_width=True, hide_index=True)
+
+    elif aba == "Registrar devolução":
+        if not ativos:
+            st.info("Não existem empréstimos ativos para devolução.")
+            return
+        por_id = {e["id"]: e for e in ativos}
+        emprestimo_id = st.selectbox(
+            "Empréstimo ativo", list(por_id),
+            format_func=lambda i: f"Nº {por_id[i]['numero']} — {pessoas.get(por_id[i]['pessoa_id'], {}).get('nome', '—')}")
+        emprestimo = por_id[emprestimo_id]
+        try:
+            itens = listar_itens_devolucao(emprestimo_id)
+        except Exception as erro:
+            LOG.warning("Falha ao consultar itens de devolução: %s", type(erro).__name__)
+            st.error("Não foi possível consultar os itens deste empréstimo.")
+            return
+        pendentes = [i for i in itens if i.get("data_devolucao") is None]
+        if not pendentes:
+            st.info("Todos os itens deste empréstimo já foram devolvidos.")
+            return
+        por_item = {i["id"]: i for i in pendentes}
+        def descricao_item(i):
+            b = bens.get(por_item[i]["patrimonio_id"], {})
+            return f"{b.get('codigo', '—')} — {b.get('descricao', 'Patrimônio')}"
+        st.caption(f"{len(pendentes)} item(ns) aguardando devolução")
+        with st.form("form_devolucao_ipb"):
+            selecionados = st.multiselect("Patrimônios recebidos *", list(por_item),
+                                         default=list(por_item), format_func=descricao_item)
+            col1, col2 = st.columns(2)
+            with col1:
+                data_devolucao = st.date_input("Data de devolução *", value=date.today(), format="DD/MM/YYYY")
+                responsavel = st.text_input("Responsável pelo recebimento *", value=nome_usuario)
+            with col2:
+                estado = st.selectbox("Estado dos bens devolvidos", ["Não alterar", "Novo", "Bom", "Regular", "Ruim"])
+                st.caption("Estado Ruim encaminha o patrimônio para manutenção.")
+            observacoes = st.text_area("Observações da devolução")
+            enviar = st.form_submit_button("Confirmar devolução", type="primary", use_container_width=True)
+        if enviar:
+            if not selecionados or not responsavel.strip():
+                st.error("Selecione os patrimônios e informe o responsável.")
+            elif data_devolucao < date.fromisoformat(emprestimo["data_retirada"]):
+                st.error("A data de devolução não pode ser anterior à retirada.")
+            else:
+                try:
+                    resposta = api_usuario(st.session_state["access_token"]).rpc(
+                        "registrar_devolucao_ipb", {
+                            "p_emprestimo_id": emprestimo_id,
+                            "p_item_ids": selecionados,
+                            "p_data_devolucao": data_devolucao.isoformat(),
+                            "p_responsavel_devolucao": responsavel.strip(),
+                            "p_estado_na_devolucao": None if estado == "Não alterar" else estado,
+                            "p_observacoes": observacoes.strip() or None,
+                        }).execute()
+                    if not isinstance(resposta.data, dict) or "quantidade_devolvida" not in resposta.data:
+                        raise ValueError("O banco não confirmou a devolução")
+                except Exception as erro:
+                    LOG.warning("Falha ao registrar devolução: tipo=%s codigo=%s mensagem=%s",
+                                type(erro).__name__, getattr(erro, "code", None), getattr(erro, "message", None))
+                    st.error("Não foi possível confirmar a devolução. Confira o histórico antes de tentar novamente.")
+                    if getattr(erro, "code", None):
+                        st.code(f"Código do Supabase: {erro.code}")
+                    if getattr(erro, "message", None):
+                        st.warning(f"Mensagem do Supabase: {erro.message}")
+                else:
+                    resultado = resposta.data
+                    st.session_state["mensagem_devolucao"] = (
+                        f"Devolução registrada: {resultado['quantidade_devolvida']} bem(ns). "
+                        f"Restantes: {resultado['quantidade_pendente']}.")
+                    st.session_state["devolucao_aba_pendente"] = "Histórico de devoluções"
+                    st.rerun()
+
+    elif aba == "Histórico de devoluções":
+        linhas = []
+        for e in emprestimos:
+            try:
+                itens = listar_itens_devolucao(e["id"])
+            except Exception as erro:
+                LOG.warning("Falha ao consultar histórico: %s", type(erro).__name__)
+                st.error("Não foi possível carregar o histórico completo.")
+                return
+            for i in itens:
+                if i.get("data_devolucao"):
+                    bem = bens.get(i["patrimonio_id"], {})
+                    linhas.append({
+                        "Empréstimo": e["numero"], "Código": bem.get("codigo", "—"),
+                        "Patrimônio": bem.get("descricao", "—"),
+                        "Data de devolução": i["data_devolucao"],
+                        "Estado na devolução": i.get("estado_na_devolucao") or "—",
+                        "Responsável": i.get("responsavel_devolucao") or "—",
+                        "Observações": i.get("observacoes") or "—",
+                    })
+        st.caption(f"{len(linhas)} bem(ns) devolvido(s) — empréstimos mais recentes")
+        st.dataframe(linhas, use_container_width=True, hide_index=True)
+        st.info("Anexos de recibos assinados serão habilitados após configurar um bucket privado no Supabase Storage.")
+
+
 def painel_principal(nome):
     st.header("Painel principal")
     st.success(f"Bem-vindo(a), {nome}!")
@@ -687,6 +826,8 @@ elif pagina == "Patrimônios":
     pagina_patrimonios(papel)
 elif pagina == "Empréstimos":
     pagina_emprestimos(papel, nome)
+elif pagina == "Devoluções":
+    pagina_devolucoes(papel, nome)
 elif pagina == "Usuários":
     if papel != "admin":
         st.error("Acesso restrito ao administrador.")
