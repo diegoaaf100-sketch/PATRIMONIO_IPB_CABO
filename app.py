@@ -144,6 +144,7 @@ button[data-testid="stBaseButton-headerNoPadding"]:has(svg[data-testid="stIconMa
     [data-testid="stSidebarHeader"] button { min-width: 46px !important; min-height: 46px !important; }
 }
 
+.ipb-banner .ipb-igreja-nome { font-size: clamp(1rem, 1.65vw, 1.35rem) !important; font-weight: 600 !important; color: #e7fff0 !important; margin: 3px 0 5px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1357,16 +1358,7 @@ def pagina_usuarios_ipb(papel):
     st.caption("Por segurança, sua própria conta não pode ser bloqueada ou rebaixada nesta tela. Alterações de acesso entram em vigor nas próximas consultas autorizadas pelo banco.")
 
 def painel_principal(nome):
-    # A mesma sarça do menu lateral, sem duplicar nem trocar a imagem.
-    if LOGO_PATH.is_file():
-        col_logo, col_titulo = st.columns([1, 7], vertical_alignment="center")
-        with col_logo:
-            mostrar_logo(105)
-        with col_titulo:
-            st.header("Painel principal")
-            st.caption("IPB - CABO | Gestão Patrimonial")
-    else:
-        st.header("Painel principal")
+    st.header("Painel principal")
     st.success(f"Bem-vindo(a), {nome}!")
     try:
         registros = listar_patrimonios()
@@ -1399,7 +1391,7 @@ nome = perfil.get("nome_completo") or "Usuário"
 
 with st.sidebar:
     mostrar_logo(105)
-    st.header("IPB - CABO")
+    st.header("Primeira Igreja Presbiteriana do Cabo")
     st.caption("Gestão Patrimonial")
     st.divider()
     st.write("**Usuário:**", nome)
@@ -1447,7 +1439,8 @@ st.markdown(
     '<div class="ipb-banner">'
     + logo_html
     + '<div class="ipb-banner-copy">'
-    + '<h1>Sistema de Gestão Patrimonial IPB - CABO</h1>'
+    + '<h1>Sistema de Gestão Patrimonial</h1>'
+    + '<p class="ipb-igreja-nome">Primeira Igreja Presbiteriana do Cabo</p>'
     + '<p>Controle e administração dos bens patrimoniais</p>'
     + '</div></div>',
     unsafe_allow_html=True,
