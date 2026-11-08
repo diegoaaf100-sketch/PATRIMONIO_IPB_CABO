@@ -563,14 +563,28 @@ def pagina_emprestimos(papel, nome_usuario):
                         if not isinstance(resultado, dict) or "numero" not in resultado:
                             raise ValueError("O Supabase não confirmou o número do empréstimo")
                     except Exception as erro:
+                        # Mostrar o erro estruturado do PostgREST sem registrar tokens,
+                        # cabeçalhos de autenticação ou o conteúdo completo da exceção.
+                        codigo_erro = getattr(erro, "code", None)
+                        mensagem_erro = getattr(erro, "message", None)
+                        detalhes_erro = getattr(erro, "details", None)
+                        # Algumas versões da biblioteca guardam esses campos em um dicionário.
+                        if not mensagem_erro and getattr(erro, "args", None):
+                            primeiro = erro.args[0]
+                            if isinstance(primeiro, dict):
+                                codigo_erro = codigo_erro or primeiro.get("code")
+                                mensagem_erro = primeiro.get("message")
+                                detalhes_erro = detalhes_erro or primeiro.get("details")
                         LOG.error(
-    "Falha ao registrar empréstimo: tipo=%s, codigo=%s, mensagem=%s, detalhes=%s",
-    type(erro).__name__,
-    getattr(erro, "code", None),
-    getattr(erro, "message", None),
-    getattr(erro, "details", None),
-)
-                        st.error(f"Não foi possível confirmar o empréstimo ({type(erro).__name__}). Confira a lista antes de tentar novamente e verifique se o SQL foi executado.")
+                            "Falha ao registrar empréstimo: tipo=%s codigo=%s mensagem=%s detalhes=%s",
+                            type(erro).__name__, codigo_erro, mensagem_erro, detalhes_erro,
+                        )
+                        st.error("Não foi possível confirmar o empréstimo. Confira a lista antes de tentar novamente.")
+                        if codigo_erro:
+                            st.code(f"Código do Supabase: {codigo_erro}")
+                        if mensagem_erro:
+                            st.warning(f"Mensagem do Supabase: {mensagem_erro}")
+                        st.caption("Se enviar uma captura da mensagem, oculte nomes, documentos, chaves e tokens.")
                     else:
                         st.session_state["mensagem_emprestimo"] = f"Empréstimo nº {resultado['numero']} registrado com sucesso!"
                         st.session_state["emprestimo_aba_pendente"] = "Emitir recibo"
