@@ -3,3 +3,4 @@ supabase
 postgrest
 Pillow
 reportlab
+xlsxwriter
