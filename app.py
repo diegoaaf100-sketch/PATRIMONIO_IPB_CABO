@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -87,7 +88,7 @@ def consultar_perfil(token, user_id):
 
 
 def limpar_sessao():
-    for chave in ("access_token", "refresh_token", "user_id", "profile"):
+    for chave in ("access_token", "refresh_token", "user_id", "profile", "expires_at"):
         st.session_state.pop(chave, None)
 
 
@@ -103,12 +104,15 @@ def autenticar(email, senha):
         "refresh_token": resposta.session.refresh_token,
         "user_id": resposta.user.id,
         "profile": perfil,
+        "expires_at": resposta.session.expires_at or (int(time.time()) + resposta.session.expires_in),
     })
 
 
 def validar_sessao():
     if not st.session_state.get("refresh_token"):
         return False
+    if st.session_state.get("access_token") and int(st.session_state.get("expires_at") or 0) > time.time() + 90 and st.session_state.get("profile", {}).get("ativo"):
+        return True
     try:
         resposta = cliente_auth().auth.refresh_session(st.session_state["refresh_token"])
         if not resposta.session or not resposta.user:
@@ -122,6 +126,7 @@ def validar_sessao():
             "access_token": resposta.session.access_token,
             "refresh_token": resposta.session.refresh_token,
             "profile": perfil,
+            "expires_at": resposta.session.expires_at or (int(time.time()) + resposta.session.expires_in),
         })
         return True
     except Exception:
@@ -315,7 +320,7 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
             if not resposta.data:
                 st.error("Nenhum registro foi atualizado. Verifique suas permissões RLS.")
                 return
-            st.success("Patrimônio atualizado com sucesso!")
+            st.session_state["mensagem_patrimonio"] = "Patrimônio atualizado com sucesso!"
         else:
             # O trigger BEFORE INSERT do Supabase substitui este código temporário.
             # A coluna codigo é NOT NULL e não tem DEFAULT no esquema atual.
@@ -329,8 +334,9 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
             if codigo == "PENDENTE":
                 st.warning("Cadastro realizado, mas o gatilho de numeração não atribuiu um código. Verifique o trigger no Supabase.")
             else:
-                st.success(f"Patrimônio cadastrado! Código: {codigo}")
-        st.session_state["patrimonio_atualizado"] = True
+                st.session_state["mensagem_patrimonio"] = f"Patrimônio cadastrado! Código: {codigo}"
+        st.session_state["patrimonio_aba"] = "Consultar patrimônios"
+        st.rerun()
     except ValueError as erro:
         st.error(str(erro))
     except Exception as erro:
@@ -352,8 +358,10 @@ def pagina_patrimonios(papel):
 
     pode_gerenciar = papel in ("admin", "gestor")
     abas = ["Consultar patrimônios"] + (["Cadastrar patrimônio", "Editar patrimônio"] if pode_gerenciar else [])
-    tabs = st.tabs(abas)
-    with tabs[0]:
+    if st.session_state.get("mensagem_patrimonio"):
+        st.success(st.session_state.pop("mensagem_patrimonio"))
+    aba = st.radio("Área de patrimônios", abas, horizontal=True, key="patrimonio_aba")
+    if aba == "Consultar patrimônios":
         busca = st.text_input("Pesquisar", placeholder="Código, descrição, marca, modelo ou número de série")
         categorias_map = opcoes_referencia(categorias)
         locais_map = opcoes_referencia(locais)
@@ -385,9 +393,9 @@ def pagina_patrimonios(papel):
         st.caption(f"{len(filtrados)} patrimônio(s) encontrado(s)")
         st.dataframe(filtrados, use_container_width=True, hide_index=True)
     if pode_gerenciar:
-        with tabs[1]:
+        if aba == "Cadastrar patrimônio":
             formulario_patrimonio("form_cadastro_patrimonio", categorias, locais)
-        with tabs[2]:
+        if aba == "Editar patrimônio":
             if not registros:
                 st.info("Ainda não existem patrimônios cadastrados.")
             else:
@@ -398,8 +406,6 @@ def pagina_patrimonios(papel):
                     format_func=lambda id_: f"{por_id[id_].get('codigo', '')} — {por_id[id_].get('descricao', '')}",
                 )
                 formulario_patrimonio("form_edicao_" + selecionado, categorias, locais, por_id[selecionado])
-    if st.session_state.pop("patrimonio_atualizado", False):
-        st.caption("Para atualizar a tabela de consulta, clique em Patrimônios novamente no menu.")
 
 
 def painel_principal(nome):
