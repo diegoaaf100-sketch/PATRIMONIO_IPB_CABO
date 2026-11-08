@@ -335,13 +335,14 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
                 st.warning("Cadastro realizado, mas o gatilho de numeração não atribuiu um código. Verifique o trigger no Supabase.")
             else:
                 st.session_state["mensagem_patrimonio"] = f"Patrimônio cadastrado! Código: {codigo}"
-        st.session_state["patrimonio_aba"] = "Consultar patrimônios"
+        # A seleção será alterada ANTES da criação do radio na próxima execução.
+        st.session_state["patrimonio_aba_pendente"] = "Consultar patrimônios"
         st.rerun()
     except ValueError as erro:
         st.error(str(erro))
     except Exception as erro:
         LOG.warning("Falha ao salvar patrimônio: %s", type(erro).__name__)
-        st.error(f"Não foi possível salvar ({type(erro).__name__}). Confira as permissões e as regras do Supabase.")
+        st.error(f"Não foi possível concluir a operação ({type(erro).__name__}). Antes de tentar novamente, confira se o registro já aparece na consulta.")
 
 
 def pagina_patrimonios(papel):
@@ -360,6 +361,10 @@ def pagina_patrimonios(papel):
     abas = ["Consultar patrimônios"] + (["Cadastrar patrimônio", "Editar patrimônio"] if pode_gerenciar else [])
     if st.session_state.get("mensagem_patrimonio"):
         st.success(st.session_state.pop("mensagem_patrimonio"))
+    # Aplicar a mudança de aba antes de instanciar o widget.
+    aba_pendente = st.session_state.pop("patrimonio_aba_pendente", None)
+    if aba_pendente in abas:
+        st.session_state["patrimonio_aba"] = aba_pendente
     aba = st.radio("Área de patrimônios", abas, horizontal=True, key="patrimonio_aba")
     if aba == "Consultar patrimônios":
         busca = st.text_input("Pesquisar", placeholder="Código, descrição, marca, modelo ou número de série")
