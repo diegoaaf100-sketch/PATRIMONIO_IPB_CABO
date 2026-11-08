@@ -413,6 +413,198 @@ def pagina_patrimonios(papel):
                 formulario_patrimonio("form_edicao_" + selecionado, categorias, locais, por_id[selecionado])
 
 
+
+def listar_pessoas():
+    resposta = api_usuario(st.session_state["access_token"]).from_("pessoas").select("id,tipo,nome,documento,telefone,email,endereco,observacoes").order("nome").execute()
+    return resposta.data or []
+
+
+def listar_emprestimos():
+    resposta = api_usuario(st.session_state["access_token"]).from_("emprestimos").select("id,numero,pessoa_id,data_retirada,data_prevista_devolucao,finalidade,responsavel_entrega,responsavel_recebimento,status,observacoes,criado_em").order("numero", desc=True).limit(500).execute()
+    return resposta.data or []
+
+
+def recibo_emprestimo_pdf(emprestimo, pessoa, bens):
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
+    from xml.sax.saxutils import escape
+
+    saida = BytesIO()
+    doc = SimpleDocTemplate(saida, pagesize=A4, rightMargin=1.8*cm, leftMargin=1.8*cm, topMargin=1.8*cm, bottomMargin=1.8*cm)
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="IPBTitulo", parent=styles["Title"], textColor=colors.HexColor("#075039"), alignment=TA_CENTER, fontSize=15, spaceAfter=12))
+    styles.add(ParagraphStyle(name="IPBCorpo", parent=styles["BodyText"], fontSize=10, leading=15, spaceAfter=8))
+    corpo = lambda s: Paragraph(escape(str(s or "—")), styles["IPBCorpo"])
+    conteudo = [Paragraph("IGREJA PRESBITERIANA DO BRASIL — IPB CABO", styles["IPBTitulo"]),
+                Paragraph(f"RECIBO DE EMPRÉSTIMO Nº {emprestimo['numero']}", styles["Heading2"]), Spacer(1, 0.2*cm),
+                corpo(f"Recebedor: {pessoa.get('nome', '')}"),
+                corpo(f"Documento: {pessoa.get('documento') or 'Não informado'}"),
+                corpo(f"Telefone: {pessoa.get('telefone') or 'Não informado'}"),
+                corpo(f"Data de retirada: {emprestimo.get('data_retirada') or '—'}"),
+                corpo(f"Previsão de devolução: {emprestimo.get('data_prevista_devolucao') or 'Não definida'}"),
+                corpo(f"Finalidade: {emprestimo.get('finalidade') or 'Não informada'}"),
+                Paragraph("Bens entregues", styles["Heading3"])]
+    linhas = [["Código", "Descrição", "Conservação"]]
+    for bem in bens:
+        linhas.append([corpo(bem.get("codigo")), corpo(bem.get("descricao")), corpo(bem.get("estado_conservacao") or "Não informado")])
+    tabela = Table(linhas, colWidths=[3.3*cm, 9.1*cm, 3.5*cm], repeatRows=1, hAlign="LEFT")
+    tabela.setStyle(TableStyle([("BACKGROUND", (0,0),(-1,0),colors.HexColor("#dcece2")), ("GRID",(0,0),(-1,-1),0.4,colors.grey), ("VALIGN",(0,0),(-1,-1),"TOP"), ("LEFTPADDING",(0,0),(-1,-1),6), ("BOTTOMPADDING",(0,0),(-1,-1),7)]))
+    conteudo.extend([tabela, Spacer(1,0.5*cm), corpo(f"Observações: {emprestimo.get('observacoes') or 'Nenhuma'}"),
+                     corpo("Declaro ter recebido os bens relacionados acima e comprometo-me a devolvê-los nas condições acordadas."),
+                     Spacer(1, 1.4*cm)])
+    assinaturas = Table([
+        ["________________________________", "________________________________"],
+        [corpo(emprestimo.get("responsavel_entrega")), corpo(emprestimo.get("responsavel_recebimento"))],
+        ["Responsável pela entrega", "Responsável pelo recebimento"],
+    ], colWidths=[8*cm, 8*cm], hAlign="CENTER")
+    assinaturas.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER"), ("VALIGN",(0,0),(-1,-1),"TOP")]))
+    conteudo.append(KeepTogether(assinaturas))
+    doc.build(conteudo)
+    return saida.getvalue()
+
+
+def pagina_emprestimos(papel, nome_usuario):
+    st.header("Empréstimos")
+    st.caption("Registro, acompanhamento e emissão de recibos para assinatura em papel")
+    pode_gerenciar = papel in ("admin", "gestor")
+    try:
+        pessoas = listar_pessoas()
+        bens = listar_patrimonios()
+        emprestimos = listar_emprestimos()
+    except Exception as erro:
+        LOG.warning("Erro ao consultar empréstimos: %s", type(erro).__name__)
+        st.error(f"Não foi possível carregar os dados ({type(erro).__name__}).")
+        return
+
+    if st.session_state.get("mensagem_emprestimo"):
+        st.success(st.session_state.pop("mensagem_emprestimo"))
+    opcoes = ["Empréstimos registrados", "Emitir recibo"]
+    if pode_gerenciar:
+        opcoes = ["Novo empréstimo", "Cadastrar pessoa"] + opcoes
+    aba_pendente = st.session_state.pop("emprestimo_aba_pendente", None)
+    if aba_pendente in opcoes:
+        st.session_state["emprestimo_aba"] = aba_pendente
+    aba = st.radio("Área de empréstimos", opcoes, horizontal=True, key="emprestimo_aba")
+    pessoas_map = {p["id"]: p for p in pessoas}
+    bens_map = {b["id"]: b for b in bens}
+
+    if aba == "Cadastrar pessoa":
+        with st.form("cadastro_pessoa_ipb"):
+            tipo = st.selectbox("Tipo de cadastro", ["pessoa_fisica", "organizacao"], format_func=lambda v: "Pessoa física" if v == "pessoa_fisica" else "Organização")
+            nome = st.text_input("Nome completo ou nome da organização *")
+            documento = st.text_input("CPF/CNPJ (opcional)")
+            telefone = st.text_input("Telefone")
+            email = st.text_input("E-mail")
+            endereco = st.text_area("Endereço")
+            observacoes = st.text_area("Observações")
+            salvar = st.form_submit_button("Cadastrar pessoa", type="primary", use_container_width=True)
+        if salvar:
+            if not nome.strip():
+                st.error("Informe o nome da pessoa ou organização.")
+            else:
+                try:
+                    api_usuario(st.session_state["access_token"]).from_("pessoas").insert({
+                        "tipo": tipo, "nome": nome.strip(), "documento": documento.strip() or None,
+                        "telefone": telefone.strip() or None, "email": email.strip() or None,
+                        "endereco": endereco.strip() or None, "observacoes": observacoes.strip() or None,
+                        "criado_por": st.session_state["user_id"]
+                    }).execute()
+                except Exception as erro:
+                    LOG.warning("Erro ao cadastrar pessoa: %s", type(erro).__name__)
+                    st.error(f"Não foi possível cadastrar a pessoa ({type(erro).__name__}).")
+                else:
+                    st.session_state["mensagem_emprestimo"] = "Pessoa cadastrada com sucesso!"
+                    st.session_state["emprestimo_aba_pendente"] = "Novo empréstimo"
+                    st.rerun()
+
+    elif aba == "Novo empréstimo":
+        disponiveis = [b for b in bens if b.get("situacao") == "disponivel"]
+        if not pessoas:
+            st.info("Cadastre primeiro a pessoa ou organização que receberá os bens.")
+        elif not disponiveis:
+            st.info("Não existem patrimônios disponíveis para empréstimo.")
+        else:
+            with st.form("novo_emprestimo_ipb"):
+                pessoa_id = st.selectbox("Pessoa ou organização que receberá *", list(pessoas_map), format_func=lambda i: pessoas_map[i]["nome"])
+                ids = st.multiselect("Selecione um ou mais patrimônios disponíveis *", [b["id"] for b in disponiveis], format_func=lambda i: f"{bens_map[i]['codigo']} — {bens_map[i]['descricao']}")
+                c1, c2 = st.columns(2)
+                with c1:
+                    retirada = st.date_input("Data de retirada *", value=date.today(), format="DD/MM/YYYY")
+                    entrega = st.text_input("Responsável pela entrega *", value=nome_usuario)
+                with c2:
+                    prevista = st.date_input("Previsão de devolução", value=None, format="DD/MM/YYYY")
+                    recebimento = st.text_input("Responsável pelo recebimento *", value=pessoas_map[pessoa_id]["nome"])
+                finalidade = st.text_area("Finalidade do empréstimo")
+                observacoes = st.text_area("Observações")
+                enviar = st.form_submit_button("Registrar empréstimo", type="primary", use_container_width=True)
+            if enviar:
+                if not ids or not entrega.strip() or not recebimento.strip():
+                    st.error("Selecione os bens e informe os responsáveis pela entrega e recebimento.")
+                elif prevista and prevista < retirada:
+                    st.error("A previsão de devolução não pode ser anterior à retirada.")
+                else:
+                    try:
+                        resposta = api_usuario(st.session_state["access_token"]).rpc("registrar_emprestimo_ipb", {
+                            "p_pessoa_id": pessoa_id,
+                            "p_patrimonio_ids": ids,
+                            "p_data_retirada": retirada.isoformat(),
+                            "p_data_prevista_devolucao": prevista.isoformat() if prevista else None,
+                            "p_finalidade": finalidade.strip(),
+                            "p_responsavel_entrega": entrega.strip(),
+                            "p_responsavel_recebimento": recebimento.strip(),
+                            "p_observacoes": observacoes.strip(),
+                        }).execute()
+                        resultado = resposta.data
+                        if not isinstance(resultado, dict) or "numero" not in resultado:
+                            raise ValueError("O Supabase não confirmou o número do empréstimo")
+                    except Exception as erro:
+                        LOG.warning("Falha ao registrar empréstimo: %s", type(erro).__name__)
+                        st.error(f"Não foi possível confirmar o empréstimo ({type(erro).__name__}). Confira a lista antes de tentar novamente e verifique se o SQL foi executado.")
+                    else:
+                        st.session_state["mensagem_emprestimo"] = f"Empréstimo nº {resultado['numero']} registrado com sucesso!"
+                        st.session_state["emprestimo_aba_pendente"] = "Emitir recibo"
+                        st.session_state["recibo_numero_pendente"] = resultado["numero"]
+                        st.rerun()
+
+    elif aba == "Empréstimos registrados":
+        linhas = []
+        for e in emprestimos:
+            linhas.append({"Número": e["numero"], "Recebedor": pessoas_map.get(e["pessoa_id"], {}).get("nome", "—"), "Retirada": e.get("data_retirada"), "Previsão": e.get("data_prevista_devolucao") or "—", "Status": e.get("status")})
+        st.caption(f"{len(linhas)} empréstimo(s) listado(s) — últimos 500")
+        st.dataframe(linhas, use_container_width=True, hide_index=True)
+
+    elif aba == "Emitir recibo":
+        if not emprestimos:
+            st.info("Ainda não existem empréstimos cadastrados.")
+        else:
+            por_numero = {e["numero"]: e for e in emprestimos}
+            numeros = list(por_numero)
+            preferido = st.session_state.pop("recibo_numero_pendente", None)
+            numero = st.selectbox("Selecione o empréstimo", numeros, index=numeros.index(preferido) if preferido in numeros else 0, format_func=lambda n: f"Empréstimo nº {n} — {pessoas_map.get(por_numero[n]['pessoa_id'], {}).get('nome', '—')}")
+            emprestimo = por_numero[numero]
+            try:
+                resposta = api_usuario(st.session_state["access_token"]).from_("itens_emprestimo").select("patrimonio_id").eq("emprestimo_id", emprestimo["id"]).execute()
+                ids = [i["patrimonio_id"] for i in (resposta.data or [])]
+                bens_recibo = [bens_map[i] for i in ids if i in bens_map]
+                if len(bens_recibo) != len(ids) or not ids:
+                    st.warning("Não foi possível identificar todos os bens deste empréstimo.")
+                elif emprestimo["pessoa_id"] not in pessoas_map:
+                    st.warning("Pessoa associada ao empréstimo não encontrada.")
+                else:
+                    pdf = recibo_emprestimo_pdf(emprestimo, pessoas_map[emprestimo["pessoa_id"]], bens_recibo)
+                    st.download_button("Baixar recibo em PDF", data=pdf, file_name=f"recibo_emprestimo_{numero}.pdf", mime="application/pdf", type="primary", use_container_width=True)
+                    st.caption("Imprima o recibo e recolha as assinaturas em papel. O PDF é gerado sob demanda e não é anexado automaticamente ao Supabase.")
+            except ImportError:
+                st.error("A biblioteca reportlab não está instalada. Adicione reportlab ao requirements.txt do GitHub.")
+            except Exception as erro:
+                LOG.warning("Falha ao gerar recibo: %s", type(erro).__name__)
+                st.error(f"Não foi possível gerar o recibo ({type(erro).__name__}).")
+
 def painel_principal(nome):
     st.header("Painel principal")
     st.success(f"Bem-vindo(a), {nome}!")
@@ -473,6 +665,8 @@ if pagina == "Painel principal":
     painel_principal(nome)
 elif pagina == "Patrimônios":
     pagina_patrimonios(papel)
+elif pagina == "Empréstimos":
+    pagina_emprestimos(papel, nome)
 elif pagina == "Usuários":
     if papel != "admin":
         st.error("Acesso restrito ao administrador.")
