@@ -965,6 +965,223 @@ def pagina_historico_patrimonio():
         st.info("Nenhum comprovante relacionado a este patrimônio.")
 
 
+
+# =========================================================
+# RELATÓRIOS PATRIMONIAIS — CONSULTA, PDF E EXCEL
+# =========================================================
+def relatorio_buscar_todos(tabela, campos, ordem="id"):
+    registros = []
+    pagina = 0
+    while True:
+        resposta = (api_usuario(st.session_state["access_token"])
+                    .from_(tabela).select(campos).order(ordem)
+                    .range(pagina * 500, pagina * 500 + 499).execute())
+        lote = resposta.data or []
+        registros.extend(lote)
+        if len(lote) < 500:
+            break
+        pagina += 1
+    return registros
+
+
+def relatorio_pdf(titulo, colunas, linhas, resumo):
+    from io import BytesIO
+    from xml.sax.saxutils import escape
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, LongTable, TableStyle
+
+    saida = BytesIO()
+    documento = SimpleDocTemplate(saida, pagesize=landscape(A4),
+        rightMargin=1.2*cm, leftMargin=1.2*cm, topMargin=1.3*cm, bottomMargin=1.3*cm)
+    estilos = getSampleStyleSheet()
+    estilos.add(ParagraphStyle(name="IPBRelatorio", parent=estilos["Title"],
+        alignment=TA_CENTER, textColor=colors.HexColor("#075039"), fontSize=16))
+    estilos.add(ParagraphStyle(name="IPBCelula", parent=estilos["BodyText"],
+        fontSize=7, leading=9))
+    def celula(valor):
+        return Paragraph(escape(str(valor if valor is not None else "—")), estilos["IPBCelula"])
+    elementos = [Paragraph("IGREJA PRESBITERIANA DO BRASIL — IPB CABO", estilos["IPBRelatorio"]),
+        Paragraph(escape(titulo), estilos["Heading2"]),
+        Paragraph(escape(resumo), estilos["Normal"]), Spacer(1, .4*cm)]
+    if linhas:
+        dados = [[celula(c) for c in colunas]]
+        dados += [[celula(l.get(c, "—")) for c in colunas] for l in linhas]
+        largura = landscape(A4)[0] - 2.4*cm
+        tabela = LongTable(dados, colWidths=[largura/len(colunas)]*len(colunas), repeatRows=1)
+        tabela.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#dcece2")),
+            ("GRID", (0,0), (-1,-1), .25, colors.HexColor("#bccfc2")),
+            ("VALIGN", (0,0), (-1,-1), "TOP"),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#f4f8f5")]),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ]))
+        elementos.append(tabela)
+    else:
+        elementos.append(Paragraph("Nenhum registro encontrado.", estilos["Normal"]))
+    def rodape(canvas, doc):
+        canvas.setFont("Helvetica", 8)
+        canvas.drawRightString(landscape(A4)[0] - 1.2*cm, .7*cm, f"Página {doc.page}")
+    documento.build(elementos, onFirstPage=rodape, onLaterPages=rodape)
+    return saida.getvalue()
+
+
+def relatorio_excel(titulo, colunas, linhas, resumo):
+    from io import BytesIO
+    import xlsxwriter
+    saida = BytesIO()
+    workbook = xlsxwriter.Workbook(saida, {"in_memory": True})
+    ws = workbook.add_worksheet("Relatório")
+    cab = workbook.add_format({"bold": True, "bg_color": "#075039", "font_color": "white", "border": 1})
+    titulo_fmt = workbook.add_format({"bold": True, "font_size": 16, "font_color": "#075039"})
+    normal = workbook.add_format({"text_wrap": True, "valign": "top"})
+    ws.write(0, 0, "IPB - CABO | " + titulo, titulo_fmt)
+    ws.write(1, 0, resumo)
+    for j, coluna in enumerate(colunas):
+        ws.write(3, j, coluna, cab)
+        ws.set_column(j, j, min(38, max(16, len(coluna)+5)))
+    for i, linha in enumerate(linhas, 4):
+        for j, coluna in enumerate(colunas):
+            valor = linha.get(coluna)
+            # Strings iniciadas por =, +, - ou @ são gravadas como texto, nunca fórmula.
+            if valor is None:
+                valor = ""
+            if isinstance(valor, (int, float)) and not isinstance(valor, bool):
+                ws.write_number(i, j, valor, normal)
+            else:
+                ws.write_string(i, j, str(valor), normal)
+    if colunas:
+        ws.autofilter(3, 0, max(4, len(linhas)+3), len(colunas)-1)
+    ws.freeze_panes(4, 0)
+    ws.set_landscape()
+    ws.fit_to_pages(1, 0)
+    workbook.close()
+    return saida.getvalue()
+
+
+def pagina_relatorios():
+    st.header("Relatórios patrimoniais")
+    st.caption("Inventário, movimentações, pendências e valores — IPB CABO")
+    hoje = date.today()
+    tipo = st.selectbox("Tipo de relatório", [
+        "Inventário patrimonial", "Empréstimos ativos", "Empréstimos atrasados",
+        "Histórico de empréstimos", "Histórico de devoluções", "Valores patrimoniais"
+    ])
+    try:
+        bens = listar_patrimonios()
+        categorias = {x["id"]: x["nome"] for x in listar_referencias("categorias")}
+        locais = {x["id"]: x["nome"] for x in listar_referencias("localizacoes")}
+        pessoas = {x["id"]: x["nome"] for x in relatorio_buscar_todos("pessoas", "id,nome", "nome")}
+    except Exception as erro:
+        LOG.warning("Falha nos dados de relatório: %s", type(erro).__name__)
+        st.error("Não foi possível consultar os dados do relatório. Confira as permissões.")
+        return
+    fc, fl, fs = st.columns(3)
+    with fc:
+        categorias_opts = ["Todas"] + sorted(set(categorias.values()))
+        categoria = st.selectbox("Categoria", categorias_opts)
+    with fl:
+        locais_opts = ["Todas"] + sorted(set(locais.values()))
+        local = st.selectbox("Localização", locais_opts)
+    with fs:
+        situacao = st.selectbox("Situação", ["Todas", "disponivel", "emprestado", "manutencao"])
+    bens_filtrados = [b for b in bens if
+        (categoria == "Todas" or categorias.get(b.get("categoria_id")) == categoria) and
+        (local == "Todas" or locais.get(b.get("localizacao_id")) == local) and
+        (situacao == "Todas" or b.get("situacao") == situacao)]
+    bens_ids = {b["id"] for b in bens_filtrados}
+    colunas = []
+    linhas = []
+    periodo = ""
+    if tipo in ("Inventário patrimonial", "Valores patrimoniais"):
+        for b in bens_filtrados:
+            linha = {"Código": b.get("codigo") or "", "Descrição": b.get("descricao") or "",
+                "Categoria": categorias.get(b.get("categoria_id"), "Não informada"),
+                "Localização": locais.get(b.get("localizacao_id"), "Não informada"),
+                "Situação": b.get("situacao") or "", "Conservação": b.get("estado_conservacao") or "",
+                "Valor (R$)": float(b.get("valor_aquisicao") or 0)}
+            linhas.append(linha)
+        colunas = ["Código", "Descrição", "Categoria", "Localização", "Situação", "Conservação", "Valor (R$)"]
+        total = sum(x["Valor (R$)"] for x in linhas)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Bens", len(linhas))
+        c2.metric("Com valor informado", sum(b.get("valor_aquisicao") is not None for b in bens_filtrados))
+        c3.metric("Valor registrado (R$)", f"{total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        if tipo == "Valores patrimoniais":
+            st.caption("Soma dos valores de aquisição registrados; não é avaliação de mercado nem depreciação.")
+    else:
+        inicio, fim = None, None
+        if tipo in ("Histórico de empréstimos", "Histórico de devoluções"):
+            ci, cf = st.columns(2)
+            with ci:
+                inicio = st.date_input("Data inicial", value=date(hoje.year, 1, 1), format="DD/MM/YYYY")
+            with cf:
+                fim = st.date_input("Data final", value=hoje, format="DD/MM/YYYY")
+            if inicio > fim:
+                st.warning("A data inicial deve ser anterior ou igual à data final.")
+                return
+            periodo = f" | Período: {inicio:%d/%m/%Y} a {fim:%d/%m/%Y}"
+        try:
+            emprestimos = relatorio_buscar_todos("emprestimos",
+                "id,numero,pessoa_id,data_retirada,data_prevista_devolucao,status,finalidade,responsavel_entrega,responsavel_recebimento", "numero")
+            itens = relatorio_buscar_todos("itens_emprestimo",
+                "id,emprestimo_id,patrimonio_id,data_devolucao,estado_na_devolucao,responsavel_devolucao", "id")
+        except Exception as erro:
+            LOG.warning("Falha na consulta de movimentações: %s", type(erro).__name__)
+            st.error("Não foi possível carregar as movimentações.")
+            return
+        bens_map = {b["id"]: b for b in bens}
+        emprestimos_map = {e["id"]: e for e in emprestimos}
+        for item in itens:
+            if item.get("patrimonio_id") not in bens_ids:
+                continue
+            e = emprestimos_map.get(item["emprestimo_id"])
+            if not e:
+                continue
+            retirada = e.get("data_retirada") or ""
+            devolucao = item.get("data_devolucao") or ""
+            prevista = e.get("data_prevista_devolucao") or ""
+            if tipo == "Empréstimos ativos" and devolucao:
+                continue
+            if tipo == "Empréstimos atrasados" and (devolucao or not prevista or prevista >= hoje.isoformat()):
+                continue
+            if tipo == "Histórico de empréstimos" and not (inicio.isoformat() <= retirada <= fim.isoformat()):
+                continue
+            if tipo == "Histórico de devoluções" and not (devolucao and inicio.isoformat() <= devolucao <= fim.isoformat()):
+                continue
+            b = bens_map.get(item["patrimonio_id"], {})
+            linhas.append({"Nº": e.get("numero"), "Código": b.get("codigo") or "",
+                "Patrimônio": b.get("descricao") or "", "Recebedor": pessoas.get(e.get("pessoa_id"), "—"),
+                "Retirada": retirada, "Previsão": prevista, "Devolução": devolucao or "Pendente",
+                "Status": "Devolvido" if devolucao else ("Atrasado" if prevista and prevista < hoje.isoformat() else "Pendente"),
+                "Responsável devolução": item.get("responsavel_devolucao") or ""})
+        colunas = ["Nº", "Código", "Patrimônio", "Recebedor", "Retirada", "Previsão", "Devolução", "Status", "Responsável devolução"]
+        st.metric("Movimentações encontradas", len(linhas))
+        st.caption("Empréstimos são exibidos por bem. Pendências e atrasos consideram somente itens ainda não devolvidos.")
+    st.caption(f"{len(linhas)} linha(s) no relatório")
+    st.dataframe(linhas, use_container_width=True, hide_index=True)
+    resumo = f"Emitido em {hoje:%d/%m/%Y} | Registros: {len(linhas)}{periodo} | Categoria: {categoria} | Local: {local} | Situação: {situacao}"
+    try:
+        pdf = relatorio_pdf(tipo, colunas, linhas, resumo)
+        excel = relatorio_excel(tipo, colunas, linhas, resumo)
+    except ImportError:
+        st.error("Para exportar Excel, acrescente xlsxwriter ao requirements.txt. A biblioteca reportlab também é necessária para PDF.")
+        return
+    except Exception as erro:
+        LOG.warning("Falha ao gerar relatórios: %s", type(erro).__name__)
+        st.error("Não foi possível gerar os arquivos do relatório.")
+        return
+    cpdf, cexcel = st.columns(2)
+    with cpdf:
+        st.download_button("Baixar relatório em PDF", data=pdf, file_name="relatorio_ipb_cabo.pdf",
+            mime="application/pdf", type="primary", use_container_width=True)
+    with cexcel:
+        st.download_button("Baixar relatório em Excel", data=excel, file_name="relatorio_ipb_cabo.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+
 def painel_principal(nome):
     st.header("Painel principal")
     st.success(f"Bem-vindo(a), {nome}!")
@@ -1033,6 +1250,8 @@ elif pagina == "Documentos assinados":
     pagina_documentos(papel)
 elif pagina == "Histórico por patrimônio":
     pagina_historico_patrimonio()
+elif pagina == "Relatórios":
+    pagina_relatorios()
 elif pagina == "Usuários":
     if papel != "admin":
         st.error("Acesso restrito ao administrador.")
