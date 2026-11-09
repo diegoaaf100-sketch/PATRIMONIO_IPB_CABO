@@ -645,45 +645,144 @@ def listar_emprestimos():
 
 
 def recibo_emprestimo_pdf(emprestimo, pessoa, bens):
+    """Recibo A4 para assinatura na retirada e na devolução, inclusive manual."""
     from io import BytesIO
+    from xml.sax.saxutils import escape
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
     from reportlab.lib.units import cm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
-    from xml.sax.saxutils import escape
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, HRFlowable
+    )
 
+    verde = colors.HexColor("#075039")
+    cinza = colors.HexColor("#52645A")
+    fundo = colors.HexColor("#EAF3ED")
     saida = BytesIO()
-    doc = SimpleDocTemplate(saida, pagesize=A4, rightMargin=1.8*cm, leftMargin=1.8*cm, topMargin=1.8*cm, bottomMargin=1.8*cm)
-    styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="IPBTitulo", parent=styles["Title"], textColor=colors.HexColor("#075039"), alignment=TA_CENTER, fontSize=15, spaceAfter=12))
-    styles.add(ParagraphStyle(name="IPBCorpo", parent=styles["BodyText"], fontSize=10, leading=15, spaceAfter=8))
-    corpo = lambda s: Paragraph(escape(str(s or "—")), styles["IPBCorpo"])
-    conteudo = [Paragraph("IGREJA PRESBITERIANA DO BRASIL — IPB CABO", styles["IPBTitulo"]),
-                Paragraph(f"RECIBO DE EMPRÉSTIMO Nº {emprestimo['numero']}", styles["Heading2"]), Spacer(1, 0.2*cm),
-                corpo(f"Recebedor: {pessoa.get('nome', '')}"),
-                corpo(f"Documento: {pessoa.get('documento') or 'Não informado'}"),
-                corpo(f"Telefone: {pessoa.get('telefone') or 'Não informado'}"),
-                corpo(f"Data de retirada: {emprestimo.get('data_retirada') or '—'}"),
-                corpo(f"Previsão de devolução: {emprestimo.get('data_prevista_devolucao') or 'Não definida'}"),
-                corpo(f"Finalidade: {emprestimo.get('finalidade') or 'Não informada'}"),
-                Paragraph("Bens entregues", styles["Heading3"])]
-    linhas = [["Código", "Descrição", "Conservação"]]
+    doc = SimpleDocTemplate(
+        saida, pagesize=A4, rightMargin=1.65*cm, leftMargin=1.65*cm,
+        topMargin=1.45*cm, bottomMargin=1.45*cm
+    )
+    estilos = getSampleStyleSheet()
+    estilos.add(ParagraphStyle(
+        name="IPBInstituicao", parent=estilos["Normal"], alignment=TA_CENTER,
+        fontName="Helvetica-Bold", fontSize=13, leading=17, textColor=verde,
+        spaceAfter=4
+    ))
+    estilos.add(ParagraphStyle(
+        name="IPBSubtituloRecibo", parent=estilos["Normal"], alignment=TA_CENTER,
+        fontSize=11, leading=15, textColor=cinza, spaceAfter=11
+    ))
+    estilos.add(ParagraphStyle(
+        name="IPBSecaoRecibo", parent=estilos["Normal"], fontName="Helvetica-Bold",
+        fontSize=10, leading=13, textColor=verde, spaceBefore=11, spaceAfter=7
+    ))
+    estilos.add(ParagraphStyle(
+        name="IPBTextoRecibo", parent=estilos["Normal"], fontSize=9, leading=13,
+        textColor=colors.HexColor("#263B31"), spaceAfter=5
+    ))
+    estilos.add(ParagraphStyle(
+        name="IPBTextoCentroRecibo", parent=estilos["IPBTextoRecibo"],
+        alignment=TA_CENTER, spaceAfter=0
+    ))
+    estilos.add(ParagraphStyle(
+        name="IPBAssinaturaNome", parent=estilos["Normal"], alignment=TA_CENTER,
+        fontName="Helvetica-Bold", fontSize=9, leading=12, spaceAfter=2
+    ))
+    estilos.add(ParagraphStyle(
+        name="IPBAssinaturaFuncao", parent=estilos["Normal"], alignment=TA_CENTER,
+        fontSize=8, leading=11, textColor=cinza
+    ))
+
+    def p(valor, estilo="IPBTextoRecibo"):
+        return Paragraph(escape(str(valor if valor not in (None, "") else "—")), estilos[estilo])
+
+    def campo(rotulo, valor):
+        return Paragraph(
+            f"<b>{escape(rotulo)}:</b> {escape(str(valor if valor not in (None, '') else '—'))}",
+            estilos["IPBTextoRecibo"]
+        )
+
+    def assinaturas(nome_esquerda, funcao_esquerda, nome_direita, funcao_direita):
+        def coluna(nome, funcao):
+            return [
+                Spacer(1, .68*cm),
+                p("____________________________________", "IPBTextoCentroRecibo"),
+                p(nome or "Nome: __________________________", "IPBAssinaturaNome"),
+                p(funcao, "IPBAssinaturaFuncao"),
+            ]
+        tabela = Table([[
+            coluna(nome_esquerda, funcao_esquerda),
+            coluna(nome_direita, funcao_direita),
+        ]], colWidths=[8.45*cm, 8.45*cm])
+        tabela.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        return KeepTogether(tabela)
+
+    numero = emprestimo.get("numero", "—")
+    conteudo = [
+        p("PRIMEIRA IGREJA PRESBITERIANA DO CABO", "IPBInstituicao"),
+        p(f"RECIBO DE EMPRÉSTIMO PATRIMONIAL Nº {numero}", "IPBSubtituloRecibo"),
+        HRFlowable(width="100%", thickness=1.4, color=verde),
+        p("01  |  IDENTIFICAÇÃO DO EMPRÉSTIMO", "IPBSecaoRecibo"),
+        campo("Pessoa / instituição que retira", pessoa.get("nome")),
+        campo("Documento", pessoa.get("documento") or "Não informado"),
+        campo("Telefone", pessoa.get("telefone") or "Não informado"),
+        campo("Data da retirada", emprestimo.get("data_retirada")),
+        campo("Previsão de devolução", emprestimo.get("data_prevista_devolucao") or "Não definida"),
+        campo("Finalidade", emprestimo.get("finalidade") or "Não informada"),
+        p("02  |  BENS ENTREGUES", "IPBSecaoRecibo"),
+    ]
+    linhas = [[p("CÓDIGO"), p("DESCRIÇÃO"), p("CONSERVAÇÃO")]]
     for bem in bens:
-        linhas.append([corpo(bem.get("codigo")), corpo(bem.get("descricao")), corpo(bem.get("estado_conservacao") or "Não informado")])
-    tabela = Table(linhas, colWidths=[3.3*cm, 9.1*cm, 3.5*cm], repeatRows=1, hAlign="LEFT")
-    tabela.setStyle(TableStyle([("BACKGROUND", (0,0),(-1,0),colors.HexColor("#dcece2")), ("GRID",(0,0),(-1,-1),0.4,colors.grey), ("VALIGN",(0,0),(-1,-1),"TOP"), ("LEFTPADDING",(0,0),(-1,-1),6), ("BOTTOMPADDING",(0,0),(-1,-1),7)]))
-    conteudo.extend([tabela, Spacer(1,0.5*cm), corpo(f"Observações: {emprestimo.get('observacoes') or 'Nenhuma'}"),
-                     corpo("Declaro ter recebido os bens relacionados acima e comprometo-me a devolvê-los nas condições acordadas."),
-                     Spacer(1, 1.4*cm)])
-    assinaturas = Table([
-        ["________________________________", "________________________________"],
-        [corpo(emprestimo.get("responsavel_entrega")), corpo(emprestimo.get("responsavel_recebimento"))],
-        ["Responsável pela entrega", "Responsável pelo recebimento"],
-    ], colWidths=[8*cm, 8*cm], hAlign="CENTER")
-    assinaturas.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER"), ("VALIGN",(0,0),(-1,-1),"TOP")]))
-    conteudo.append(KeepTogether(assinaturas))
+        linhas.append([
+            p(bem.get("codigo")),
+            p(bem.get("descricao")),
+            p(bem.get("estado_conservacao") or "Não informado"),
+        ])
+    tabela_bens = Table(
+        linhas, colWidths=[3.15*cm, 10.05*cm, 3.7*cm],
+        repeatRows=1, hAlign="CENTER"
+    )
+    tabela_bens.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), fundo),
+        ("GRID", (0, 0), (-1, -1), .35, colors.HexColor("#B7C9BD")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    conteudo.extend([
+        tabela_bens,
+        Spacer(1, .22*cm),
+        campo("Observações", emprestimo.get("observacoes") or "Nenhuma"),
+        p("03  |  CONFIRMAÇÃO DA RETIRADA", "IPBSecaoRecibo"),
+        p("Declaro que os bens acima foram entregues e recebidos, comprometendo-me a devolvê-los nas condições acordadas."),
+        assinaturas(
+            emprestimo.get("responsavel_entrega"), "Quem entregou os bens",
+            emprestimo.get("responsavel_recebimento") or pessoa.get("nome"),
+            "Quem recebeu os bens",
+        ),
+        Spacer(1, .35*cm),
+        HRFlowable(width="100%", thickness=.7, color=colors.HexColor("#B7C9BD")),
+        p("04  |  REGISTRO DA DEVOLUÇÃO", "IPBSecaoRecibo"),
+        p("Data da devolução: ______ / ______ / __________"),
+        p("Condição dos bens na devolução:  (   ) Boa    (   ) Regular    (   ) Necessita manutenção"),
+        p("Observações da devolução: __________________________________________________________"),
+        Spacer(1, .15*cm),
+        assinaturas(
+            pessoa.get("nome"), "Quem devolveu os bens",
+            None, "Quem recebeu a devolução",
+        ),
+        Spacer(1, .28*cm),
+        p("Em devoluções parciais, registre os itens efetivamente devolvidos no sistema e anexe o comprovante assinado.", "IPBTextoRecibo"),
+    ])
     doc.build(conteudo)
     return saida.getvalue()
 
