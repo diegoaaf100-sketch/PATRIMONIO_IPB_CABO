@@ -2114,7 +2114,6 @@ def painel_principal(nome):
                 unsafe_allow_html=True,
             )
 
-    st.markdown('<div class="ipb-section-label">Empréstimos e prazos</div>', unsafe_allow_html=True)
     try:
         emprestimos = listar_emprestimos()
     except Exception as erro:
@@ -2135,15 +2134,27 @@ def painel_principal(nome):
                 continue
             if prazo < hoje:
                 atrasados.append(emp)
-        # Os três quadros usam os patrimônios já carregados do Supabase.
-        valor_total = sum((Decimal(str(r.get("valor_aquisicao") or 0)) for r in registros), Decimal("0"))
-        valor_formatado = f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        # Valores calculados a partir dos bens cadastrados no Supabase.
+        def valor_do_bem(registro):
+            try:
+                return Decimal(str(registro.get("valor_aquisicao") or 0))
+            except (InvalidOperation, ValueError, TypeError):
+                return Decimal("0")
+
+        def reais(valor):
+            return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        valor_total = sum((valor_do_bem(r) for r in registros), Decimal("0"))
+        valor_emprestado = sum(
+            (valor_do_bem(r) for r in registros
+             if str(r.get("situacao") or "").strip().lower() == "emprestado"),
+            Decimal("0"),
+        )
         indicadores_emprestimos = [
-            ("Valor total do patrimônio", valor_formatado, "Soma dos valores de aquisição informados"),
-            ("Bens emprestados", str(emprestados), "Patrimônios atualmente emprestados"),
-            ("Quantidade total de bens", str(total), "Todos os patrimônios cadastrados"),
+            ("Valor total do patrimônio", reais(valor_total), "Soma dos valores de aquisição informados"),
+            ("Valor total dos bens emprestados", reais(valor_emprestado), "Soma dos valores dos patrimônios emprestados"),
         ]
-        for coluna, (titulo, valor, rodape) in zip(st.columns(3), indicadores_emprestimos):
+        for coluna, (titulo, valor, rodape) in zip(st.columns(2), indicadores_emprestimos):
             with coluna:
                 st.markdown(
                     f'<div class="ipb-kpi"><div class="ipb-kpi-label">{escape(titulo)}</div>'
