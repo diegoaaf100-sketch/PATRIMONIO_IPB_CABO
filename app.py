@@ -315,7 +315,7 @@ def listar_patrimonios():
         resposta = (
             api_usuario(st.session_state["access_token"])
             .from_("patrimonios")
-            .select("id,codigo,descricao,categoria_id,localizacao_id,marca,modelo,numero_serie,data_aquisicao,valor_aquisicao,estado_conservacao,situacao,observacoes,criado_em,atualizado_em")
+            .select("id,codigo,descricao,categoria_id,localizacao_id,marca,modelo,numero_serie,data_aquisicao,valor_aquisicao,estado_conservacao,situacao,observacoes,foto_caminho,criado_em,atualizado_em")
             .order("codigo")
             .range(pagina * tamanho, (pagina + 1) * tamanho - 1)
             .execute()
@@ -352,6 +352,83 @@ def decimal_opcional(valor_texto):
     if not numero.is_finite() or numero < 0:
         raise ValueError("O valor de aquisição deve ser um número positivo ou zero.")
     return float(numero)
+
+
+# Fotos dos patrimônios em bucket privado; sem chave service_role.
+BUCKET_FOTOS = "ipb-patrimonios"
+LIMITE_FOTO = 5 * 1024 * 1024
+
+
+def requisicao_foto(metodo, caminho, dados=None, mime=None):
+    url = (st.secrets["SUPABASE_URL"].rstrip("/") +
+           "/storage/v1/object/" + BUCKET_FOTOS + "/" + quote(caminho, safe="/"))
+    headers = {
+        "apikey": st.secrets["SUPABASE_ANON_KEY"],
+        "Authorization": "Bearer " + st.session_state["access_token"],
+    }
+    if mime:
+        headers["Content-Type"] = mime
+    if metodo == "POST":
+        headers["x-upsert"] = "false"
+    with urlopen(Request(url, data=dados, headers=headers, method=metodo), timeout=45) as resp:
+        return resp.read()
+
+
+def validar_foto(arquivo):
+    if arquivo is None:
+        return None
+    dados = arquivo.getvalue()
+    if not dados or len(dados) > LIMITE_FOTO:
+        raise ValueError("A foto deve ter até 5 MB.")
+    from io import BytesIO
+    try:
+        with Image.open(BytesIO(dados)) as imagem:
+            formato = imagem.format
+            imagem.verify()
+    except Exception as exc:
+        raise ValueError("Imagem inválida. Use JPG, PNG ou WEBP.") from exc
+    formatos = {"JPEG": ("jpg", "image/jpeg"), "PNG": ("png", "image/png"),
+                "WEBP": ("webp", "image/webp")}
+    if formato not in formatos:
+        raise ValueError("Formato não permitido. Use JPG, PNG ou WEBP.")
+    extensao, mime = formatos[formato]
+    return dados, extensao, mime
+
+
+def salvar_foto_patrimonio(patrimonio_id, arquivo):
+    validada = validar_foto(arquivo)
+    if validada is None:
+        return False
+    dados, extensao, mime = validada
+    caminho = f"{patrimonio_id}/{uuid.uuid4().hex}.{extensao}"
+    requisicao_foto("POST", caminho, dados, mime)
+    try:
+        resposta = (api_usuario(st.session_state["access_token"])
+                    .from_("patrimonios").update({"foto_caminho": caminho})
+                    .eq("id", patrimonio_id).execute())
+        if not resposta.data:
+            raise RuntimeError("O banco não confirmou a atualização da foto.")
+    except Exception:
+        # Tenta retirar o arquivo órfão caso o vínculo falhe.
+        try:
+            requisicao_foto("DELETE", caminho)
+        except Exception:
+            pass
+        raise
+    return True
+
+
+def exibir_foto_patrimonio(registro):
+    caminho = registro.get("foto_caminho")
+    if not caminho:
+        st.info("Este patrimônio ainda não possui foto cadastrada.")
+        return
+    try:
+        dados = requisicao_foto("GET", caminho)
+        st.image(dados, caption=f"{registro.get('codigo', '')} — {registro.get('descricao', '')}",
+                 use_container_width=False, width=360)
+    except Exception:
+        st.warning("Não foi possível carregar a foto. Verifique as permissões do Storage.")
 
 
 def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
@@ -400,6 +477,10 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
             data_aquisicao = st.date_input("Data de aquisição", value=data_inicial, format="DD/MM/YYYY")
             valor_aquisicao = st.text_input("Valor de aquisição (R$)", value=valor_str, placeholder="Ex.: 1500,00")
         observacoes = st.text_area("Observações", value=(registro or {}).get("observacoes") or "")
+        foto = st.file_uploader("Foto do patrimônio (opcional, JPG, PNG ou WEBP — até 5 MB)",
+                                type=["jpg", "jpeg", "png", "webp"], key="foto_" + chave)
+        if edicao and registro.get("foto_caminho"):
+            st.caption("Se não selecionar outra imagem, a foto atual será mantida.")
         if edicao:
             st.caption("A situação (disponível/emprestado/manutenção) não é alterada aqui, para preservar o fluxo de empréstimos.")
         enviar = st.form_submit_button(
@@ -410,6 +491,11 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
         return
     if not descricao.strip():
         st.error("Informe a descrição do patrimônio.")
+        return
+    try:
+        validar_foto(foto)
+    except ValueError as erro:
+        st.error(str(erro))
         return
     try:
         payload = {
@@ -434,6 +520,12 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
             if not resposta.data:
                 st.error("Nenhum registro foi atualizado. Verifique suas permissões RLS.")
                 return
+            if foto is not None:
+                try:
+                    salvar_foto_patrimonio(registro["id"], foto)
+                except Exception as erro_foto:
+                    st.warning(f"Dados atualizados, mas a foto não foi salva ({type(erro_foto).__name__}). Tente novamente em Editar patrimônio.")
+                    return
             st.session_state["mensagem_patrimonio"] = "Patrimônio atualizado com sucesso!"
         else:
             # O trigger BEFORE INSERT do Supabase substitui este código temporário.
@@ -444,6 +536,13 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
             if not resposta.data:
                 st.error("O Supabase não retornou o patrimônio cadastrado.")
                 return
+            novo_id = resposta.data[0]["id"]
+            if foto is not None:
+                try:
+                    salvar_foto_patrimonio(novo_id, foto)
+                except Exception as erro_foto:
+                    st.warning(f"Patrimônio cadastrado, mas a foto não foi salva ({type(erro_foto).__name__}). Abra Editar patrimônio para tentar novamente.")
+                    return
             codigo = resposta.data[0].get("codigo", "")
             if codigo == "PENDENTE":
                 st.warning("Cadastro realizado, mas o gatilho de numeração não atribuiu um código. Verifique o trigger no Supabase.")
@@ -511,6 +610,13 @@ def pagina_patrimonios(papel):
             })
         st.caption(f"{len(filtrados)} patrimônio(s) encontrado(s)")
         st.dataframe(filtrados, use_container_width=True, hide_index=True)
+        if registros:
+            st.markdown("#### Visualizar foto de um patrimônio")
+            por_id_foto = {r["id"]: r for r in registros}
+            foto_id = st.selectbox("Selecione o bem", list(por_id_foto),
+                format_func=lambda i: f"{por_id_foto[i].get('codigo','')} — {por_id_foto[i].get('descricao','')}",
+                key="visualizar_foto_bem")
+            exibir_foto_patrimonio(por_id_foto[foto_id])
     if pode_gerenciar:
         if aba == "Cadastrar patrimônio":
             formulario_patrimonio("form_cadastro_patrimonio", categorias, locais)
