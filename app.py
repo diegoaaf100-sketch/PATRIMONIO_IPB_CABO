@@ -282,6 +282,74 @@ html { -webkit-text-size-adjust: 100%; }
     .ipb-banner .ipb-sistema-nome { font-size: .76rem !important; }
 }
 
+
+/* CONTRASTE IPB: ícones de abrir/fechar menu, inclusive variantes Material. */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarHeader"] { z-index: 1001 !important; }
+[data-testid="stSidebarCollapsedControl"] button,
+[data-testid="stSidebarCollapseButton"] button,
+[data-testid="stSidebarHeader"] button,
+[data-testid="stSidebar"] button[aria-label*="Close sidebar"],
+[data-testid="stHeader"] button[aria-label*="Open sidebar"] {
+  display: inline-flex !important; align-items: center !important; justify-content: center !important;
+  background: #15865e !important; color: #fff !important;
+  border: 2px solid #e0ffec !important; border-radius: 12px !important;
+  min-width: 48px !important; min-height: 48px !important;
+  opacity: 1 !important; box-shadow: 0 2px 13px rgba(0,0,0,.42) !important;
+}
+[data-testid="stSidebarCollapsedControl"] button:hover,
+[data-testid="stSidebarCollapseButton"] button:hover,
+[data-testid="stSidebarHeader"] button:hover { background: #20a572 !important; }
+[data-testid="stSidebarCollapsedControl"] button svg,
+[data-testid="stSidebarCollapseButton"] button svg,
+[data-testid="stSidebarHeader"] button svg,
+[data-testid="stSidebarCollapsedControl"] button svg *,
+[data-testid="stSidebarCollapseButton"] button svg *,
+[data-testid="stSidebarHeader"] button svg * {
+  color: #fff !important; stroke: #fff !important; fill: none !important;
+  opacity: 1 !important; width: 27px !important; height: 27px !important;
+}
+[data-testid="stSidebarCollapsedControl"] button [data-testid="stIconMaterial"],
+[data-testid="stSidebarCollapseButton"] button [data-testid="stIconMaterial"],
+[data-testid="stSidebarHeader"] button [data-testid="stIconMaterial"],
+[data-testid="stSidebarCollapsedControl"] button span,
+[data-testid="stSidebarCollapseButton"] button span,
+[data-testid="stSidebarHeader"] button span {
+  color: #fff !important; opacity: 1 !important; font-size: 27px !important;
+}
+/* Letras claras em superfícies escuras; sem tornar texto branco sobre fundo branco. */
+[data-testid="stAppViewContainer"], [data-testid="stSidebar"],
+[data-testid="stAppViewContainer"] h1, [data-testid="stAppViewContainer"] h2,
+[data-testid="stAppViewContainer"] h3, [data-testid="stAppViewContainer"] h4,
+[data-testid="stAppViewContainer"] p, [data-testid="stSidebar"] p,
+[data-testid="stWidgetLabel"] *, [data-testid="stMarkdownContainer"] {
+  color: #fff !important;
+}
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-baseweb="select"] > div,
+[data-baseweb="input"] > div,
+[data-baseweb="textarea"] > div {
+  background-color: #164d3d !important; color: #fff !important;
+  border-color: #75ac94 !important;
+}
+[data-testid="stTextInput"] input, [data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input, [data-testid="stTextArea"] textarea,
+[data-baseweb="select"] input, [data-baseweb="select"] span,
+[data-baseweb="select"] svg, [data-baseweb="input"] input {
+  color: #fff !important; fill: #fff !important;
+}
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stTextArea"] textarea::placeholder { color: #d2e6dc !important; }
+[data-testid="stForm"] [data-baseweb="select"] * { color: #fff !important; }
+/* Tabelas HTML e campos editáveis permanecem legíveis em fundo verde. */
+[data-testid="stTable"] table, [data-testid="stTable"] th,
+[data-testid="stTable"] td { background: #164d3d !important; color: #fff !important; }
+[data-testid="stDataFrame"] { color: #fff !important; }
+
 </style>
 """, unsafe_allow_html=True)
 
