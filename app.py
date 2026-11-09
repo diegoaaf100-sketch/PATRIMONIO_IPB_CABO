@@ -936,40 +936,6 @@ def pagina_patrimonios(papel):
     aba_pendente = st.session_state.pop("patrimonio_aba_pendente", None)
     if aba_pendente in abas:
         st.session_state["patrimonio_aba"] = aba_pendente
-    st.markdown("""<style>
-    /* Mesmo padrão para os menus internos de patrimônios, empréstimos e devoluções. */
-    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] {
-        display: flex !important; flex-flow: row nowrap !important;
-        gap: 6px !important; width: 100% !important;
-    }
-    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label {
-        flex: 1 1 0 !important; min-width: 0 !important;
-        display: flex !important; align-items: center !important;
-        justify-content: center !important;
-        padding: 10px 5px !important; border: 1px solid #43816b !important;
-        border-radius: 9px !important; background: #0b4b39 !important;
-        margin: 0 !important;
-    }
-    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label:has(input:checked) {
-        background: #147d55 !important; border-color: #8de0b2 !important;
-    }
-    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label p {
-        font-size: clamp(11px, 1.05vw, 15px) !important;
-        font-weight: 650 !important; color: white !important;
-        white-space: nowrap !important;
-    }
-    @media (max-width: 768px) {
-        :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] {
-            overflow-x: auto !important; padding-bottom: 5px !important;
-        }
-        :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label {
-            flex: 0 0 auto !important; padding: 9px 10px !important;
-        }
-        :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label p {
-            font-size: 13px !important;
-        }
-    }
-    </style>""", unsafe_allow_html=True)
     aba = st.radio("Área de patrimônios", abas, horizontal=True, key="patrimonio_aba")
     if aba == "Consultar patrimônios":
         busca = st.text_input("Pesquisar", placeholder="Código, descrição, marca, modelo ou número de série")
@@ -1221,6 +1187,42 @@ def recibo_emprestimo_pdf(emprestimo, pessoa, bens):
     return saida.getvalue()
 
 
+st.markdown("""<style>
+    /* Mesmo padrão para os menus internos de patrimônios, empréstimos e devoluções. */
+    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] {
+        display: flex !important; flex-flow: row nowrap !important;
+        gap: 6px !important; width: 100% !important;
+    }
+    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label {
+        flex: 1 1 0 !important; min-width: 0 !important;
+        display: flex !important; align-items: center !important;
+        justify-content: center !important;
+        padding: 10px 5px !important; border: 1px solid #43816b !important;
+        border-radius: 9px !important; background: #0b4b39 !important;
+        margin: 0 !important;
+    }
+    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label:has(input:checked) {
+        background: #147d55 !important; border-color: #8de0b2 !important;
+    }
+    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label [data-baseweb="radio"] {display:none !important;}
+    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label p {
+        font-size: clamp(11px, 1.05vw, 15px) !important;
+        font-weight: 650 !important; color: white !important;
+        white-space: nowrap !important;
+    }
+    @media (max-width: 768px) {
+        :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] {
+            overflow-x: auto !important; padding-bottom: 5px !important;
+        }
+        :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label {
+            flex: 0 0 auto !important; padding: 9px 10px !important;
+        }
+        :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label p {
+            font-size: 13px !important;
+        }
+    }
+    </style>""", unsafe_allow_html=True)
+
 def pagina_emprestimos(papel, nome_usuario):
     st.header("Empréstimos")
     st.caption("Registro, acompanhamento e emissão de recibos para assinatura em papel")
@@ -1238,7 +1240,7 @@ def pagina_emprestimos(papel, nome_usuario):
         st.success(st.session_state.pop("mensagem_emprestimo"))
     opcoes = ["Empréstimos registrados", "Emitir recibo"]
     if pode_gerenciar:
-        opcoes = ["Novo empréstimo", "Cadastrar pessoa"] + opcoes
+        opcoes = ["Novo empréstimo"] + opcoes
     aba_pendente = st.session_state.pop("emprestimo_aba_pendente", None)
     if aba_pendente in opcoes:
         st.session_state["emprestimo_aba"] = aba_pendente
@@ -1246,44 +1248,22 @@ def pagina_emprestimos(papel, nome_usuario):
     pessoas_map = {p["id"]: p for p in pessoas}
     bens_map = {b["id"]: b for b in bens}
 
-    if aba == "Cadastrar pessoa":
-        with st.form("cadastro_pessoa_ipb"):
-            tipo = st.selectbox("Tipo de cadastro", ["pessoa_fisica", "organizacao"], format_func=lambda v: "Pessoa física" if v == "pessoa_fisica" else "Organização")
-            nome = st.text_input("Nome completo ou nome da organização *")
-            documento = st.text_input("CPF/CNPJ (opcional)")
-            telefone = st.text_input("Telefone")
-            email = st.text_input("E-mail")
-            endereco = st.text_area("Endereço")
-            observacoes = st.text_area("Observações")
-            salvar = st.form_submit_button("Cadastrar pessoa", type="primary", use_container_width=True)
-        if salvar:
-            if not nome.strip():
-                st.error("Informe o nome da pessoa ou organização.")
-            else:
-                try:
-                    api_usuario(st.session_state["access_token"]).from_("pessoas").insert({
-                        "tipo": tipo, "nome": nome.strip(), "documento": documento.strip() or None,
-                        "telefone": telefone.strip() or None, "email": email.strip() or None,
-                        "endereco": endereco.strip() or None, "observacoes": observacoes.strip() or None,
-                        "criado_por": st.session_state["user_id"]
-                    }).execute()
-                except Exception as erro:
-                    LOG.warning("Erro ao cadastrar pessoa: %s", type(erro).__name__)
-                    st.error(f"Não foi possível cadastrar a pessoa ({type(erro).__name__}).")
-                else:
-                    st.session_state["mensagem_emprestimo"] = "Pessoa cadastrada com sucesso!"
-                    st.session_state["emprestimo_aba_pendente"] = "Novo empréstimo"
-                    st.rerun()
-
-    elif aba == "Novo empréstimo":
+    if aba == "Novo empréstimo":
         disponiveis = [b for b in bens if b.get("situacao") == "disponivel"]
-        if not pessoas:
-            st.info("Cadastre primeiro a pessoa ou organização que receberá os bens.")
-        elif not disponiveis:
+        if not disponiveis:
             st.info("Não existem patrimônios disponíveis para empréstimo.")
         else:
             with st.form("novo_emprestimo_ipb"):
-                pessoa_id = st.selectbox("Pessoa ou organização que receberá *", list(pessoas_map), format_func=lambda i: pessoas_map[i]["nome"])
+                st.subheader("Dados de quem recebe o empréstimo")
+                tipo_pessoa = st.selectbox("Tipo de recebedor", ["pessoa_fisica", "organizacao"], format_func=lambda v: "Pessoa física" if v == "pessoa_fisica" else "Organização")
+                nome_pessoa = st.text_input("Nome completo ou organização *")
+                cdoc, ctel = st.columns(2)
+                with cdoc:
+                    documento_pessoa = st.text_input("CPF/CNPJ (opcional)")
+                with ctel:
+                    telefone_pessoa = st.text_input("Telefone (opcional)")
+                email_pessoa = st.text_input("E-mail (opcional)")
+                endereco_pessoa = st.text_input("Endereço (opcional)")
                 ids = st.multiselect("Selecione um ou mais patrimônios disponíveis *", [b["id"] for b in disponiveis], format_func=lambda i: f"{bens_map[i]['codigo']} — {bens_map[i]['descricao']}")
                 c1, c2 = st.columns(2)
                 with c1:
@@ -1291,17 +1271,32 @@ def pagina_emprestimos(papel, nome_usuario):
                     entrega = st.text_input("Responsável pela entrega *", value=nome_usuario)
                 with c2:
                     prevista = st.date_input("Previsão de devolução", value=None, format="DD/MM/YYYY")
-                    recebimento = st.text_input("Responsável pelo recebimento *", value=pessoas_map[pessoa_id]["nome"])
+                    recebimento = st.text_input("Responsável pelo recebimento *", value="")
                 finalidade = st.text_area("Finalidade do empréstimo")
                 observacoes = st.text_area("Observações")
                 enviar = st.form_submit_button("Registrar empréstimo", type="primary", use_container_width=True)
             if enviar:
-                if not ids or not entrega.strip() or not recebimento.strip():
-                    st.error("Selecione os bens e informe os responsáveis pela entrega e recebimento.")
+                if not ids or not nome_pessoa.strip() or not entrega.strip() or not recebimento.strip():
+                    st.error("Informe o nome de quem recebe, selecione os bens e preencha os responsáveis pela entrega e recebimento.")
                 elif prevista and prevista < retirada:
                     st.error("A previsão de devolução não pode ser anterior à retirada.")
                 else:
                     try:
+                        # O banco existente exige pessoa_id. O cadastro é realizado
+                        # automaticamente, sem uma tela separada de pessoas.
+                        dados_pessoa = {
+                            "tipo": tipo_pessoa, "nome": nome_pessoa.strip(),
+                            "documento": documento_pessoa.strip() or None,
+                            "telefone": telefone_pessoa.strip() or None,
+                            "email": email_pessoa.strip() or None,
+                            "endereco": endereco_pessoa.strip() or None,
+                            "criado_por": st.session_state["user_id"],
+                        }
+                        pessoa_criada = (api_usuario(st.session_state["access_token"])
+                            .from_("pessoas").insert(dados_pessoa).execute())
+                        if not pessoa_criada.data:
+                            raise ValueError("Não foi possível salvar os dados do recebedor")
+                        pessoa_id = pessoa_criada.data[0]["id"]
                         resposta = api_usuario(st.session_state["access_token"]).rpc("registrar_emprestimo_ipb", {
                             "p_pessoa_id": pessoa_id,
                             "p_patrimonio_ids": ids,
@@ -1340,9 +1335,39 @@ def pagina_emprestimos(papel, nome_usuario):
                         st.caption("Se enviar uma captura da mensagem, oculte nomes, documentos, chaves e tokens.")
                     else:
                         st.session_state["mensagem_emprestimo"] = f"Empréstimo nº {resultado['numero']} registrado com sucesso!"
-                        st.session_state["emprestimo_aba_pendente"] = "Emitir recibo"
-                        st.session_state["recibo_numero_pendente"] = resultado["numero"]
+                        st.session_state["emprestimo_aba_pendente"] = "Novo empréstimo"
+                        st.session_state["recibo_novo_numero"] = resultado["numero"]
                         st.rerun()
+
+        # Após salvar, o recibo aparece aqui, na própria tela de registro.
+        numero_recibo = st.session_state.get("recibo_novo_numero")
+        if numero_recibo is not None:
+            st.divider()
+            st.subheader(f"Recibo do empréstimo nº {numero_recibo}")
+            st.success("Empréstimo salvo. O recibo está disponível abaixo para impressão e assinatura.")
+            try:
+                registro = next((e for e in listar_emprestimos() if str(e.get("numero")) == str(numero_recibo)), None)
+                if registro is None:
+                    st.warning("O empréstimo foi salvo, mas ainda não foi possível carregar o recibo. Consulte a opção Emitir recibo.")
+                else:
+                    dados_recebedor = (api_usuario(st.session_state["access_token"])
+                        .from_("pessoas").select("*").eq("id", registro["pessoa_id"]).single().execute()).data
+                    itens = (api_usuario(st.session_state["access_token"])
+                        .from_("itens_emprestimo").select("patrimonio_id")
+                        .eq("emprestimo_id", registro["id"]).execute()).data or []
+                    bens_atualizados = {b["id"]: b for b in listar_patrimonios()}
+                    bens_recibo = [bens_atualizados[i["patrimonio_id"]] for i in itens if i["patrimonio_id"] in bens_atualizados]
+                    if not bens_recibo or len(bens_recibo) != len(itens):
+                        st.warning("Não foi possível carregar todos os itens do recibo.")
+                    else:
+                        pdf = recibo_emprestimo_pdf(registro, dados_recebedor, bens_recibo)
+                        st.download_button("Baixar recibo em PDF", data=pdf,
+                            file_name=f"recibo_emprestimo_{numero_recibo}.pdf",
+                            mime="application/pdf", type="primary", use_container_width=True,
+                            key=f"recibo_apos_salvar_{numero_recibo}")
+            except Exception as erro:
+                LOG.warning("Erro ao preparar recibo após salvar: %s", type(erro).__name__)
+                st.warning("Empréstimo salvo, mas não foi possível gerar o PDF agora. Use a opção Emitir recibo.")
 
     elif aba == "Empréstimos registrados":
         linhas = []
