@@ -623,6 +623,21 @@ li[role="option"][aria-selected="true"] {
   -webkit-text-fill-color: #ffffff !important;
 }
 
+
+/* Login: restaura o cartão verde, sem alterar formulários internos. */
+[data-testid="stForm"]:has(input[placeholder="Digite seu e-mail"]) {
+  background: #0b503c !important;
+  border: 1px solid #347b61 !important;
+  box-shadow: 0 12px 30px #001e1433 !important;
+}
+[data-testid="stForm"]:has(input[placeholder="Digite seu e-mail"]) label,
+[data-testid="stForm"]:has(input[placeholder="Digite seu e-mail"]) label *,
+[data-testid="stForm"]:has(input[placeholder="Digite seu e-mail"]) [data-testid="stWidgetLabel"] *,
+[data-testid="stForm"]:has(input[placeholder="Digite seu e-mail"]) p {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
