@@ -145,6 +145,24 @@ button[data-testid="stBaseButton-headerNoPadding"]:has(svg[data-testid="stIconMa
 }
 
 .ipb-banner .ipb-igreja-nome { font-size: clamp(1.5rem, 3vw, 2.3rem) !important; font-weight: 750 !important; color: #ffffff !important; margin: 0 0 8px !important; line-height:1.18; }
+
+/* Cabeçalho institucional: nome da igreja em destaque, sistema logo abaixo. */
+.ipb-banner-copy { display:flex; flex-direction:column; justify-content:center; gap:3px; }
+.ipb-banner .ipb-igreja-nome {
+    font-size:clamp(1.35rem, 2.5vw, 2.15rem) !important;
+    font-weight:800 !important; color:#fff !important;
+    line-height:1.16 !important; margin:0 !important;
+}
+.ipb-banner .ipb-sistema-nome {
+    font-size:clamp(1.05rem, 1.7vw, 1.5rem) !important;
+    font-weight:600 !important; color:#e0f2e7 !important;
+    line-height:1.2 !important; margin:0 !important;
+}
+@media(max-width:768px) {
+    .ipb-banner-copy { gap:4px; }
+    .ipb-banner .ipb-igreja-nome { font-size:1.3rem !important; }
+    .ipb-banner .ipb-sistema-nome { font-size:1.05rem !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1442,9 +1460,8 @@ st.markdown(
     '<div class="ipb-banner">'
     + logo_html
     + '<div class="ipb-banner-copy">'
-    + '<h1>Sistema de Gestão Patrimonial</h1>'
-    + '<p class="ipb-igreja-nome">Primeira Igreja Presbiteriana do Cabo</p>'
-    + '<p>Controle e administração dos bens patrimoniais</p>'
+    + '<h1 class="ipb-igreja-nome">Primeira Igreja Presbiteriana do Cabo</h1>'
+    + '<p class="ipb-sistema-nome">Sistema de Gestão Patrimonial</p>'
     + '</div></div>',
     unsafe_allow_html=True,
 )
