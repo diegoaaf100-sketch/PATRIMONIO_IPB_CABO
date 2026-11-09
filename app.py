@@ -1645,38 +1645,6 @@ def painel_principal(nome):
                 unsafe_allow_html=True,
             )
 
-    st.markdown('<div class="ipb-section-label">Distribuição e conservação</div>', unsafe_allow_html=True)
-    grafico_col, conservacao_col = st.columns([1.25, 1])
-    with grafico_col:
-        st.markdown("**Situação dos patrimônios**")
-        categorias_situacao = {
-            "Disponíveis": disponiveis,
-            "Emprestados": emprestados,
-            "Em manutenção": manutencao,
-        }
-        outros = total - sum(categorias_situacao.values())
-        if outros:
-            categorias_situacao["Outras situações"] = outros
-        if total:
-            import pandas as pd
-            st.bar_chart(pd.DataFrame({"Quantidade": categorias_situacao}), color="#68c899", horizontal=True)
-        else:
-            st.info("Nenhum patrimônio cadastrado até o momento.")
-    with conservacao_col:
-        st.markdown("**Estado de conservação**")
-        conservacao = Counter(
-            str(r.get("estado_conservacao") or "Não informado").replace("_", " ").capitalize()
-            for r in registros
-        )
-        if conservacao:
-            import pandas as pd
-            dados_conservacao = pd.DataFrame(
-                [{"Estado": estado, "Quantidade": qtd} for estado, qtd in conservacao.most_common()]
-            )
-            st.dataframe(dados_conservacao, hide_index=True, use_container_width=True)
-        else:
-            st.info("Os estados de conservação aparecerão aqui.")
-
     st.markdown('<div class="ipb-section-label">Empréstimos e prazos</div>', unsafe_allow_html=True)
     try:
         emprestimos = listar_emprestimos()
