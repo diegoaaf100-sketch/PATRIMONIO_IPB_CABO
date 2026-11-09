@@ -673,7 +673,7 @@ def listar_patrimonios():
         resposta = (
             api_usuario(st.session_state["access_token"])
             .from_("patrimonios")
-            .select("id,codigo,descricao,categoria_id,localizacao_id,marca,modelo,numero_serie,data_aquisicao,valor_aquisicao,estado_conservacao,situacao,observacoes,foto_caminho,criado_em,atualizado_em")
+            .select("id,codigo,descricao,categoria_id,localizacao_id,marca,modelo,numero_serie,data_aquisicao,valor_aquisicao,estado_conservacao,situacao,subgrupo,observacoes,foto_caminho,criado_em,atualizado_em")
             .order("codigo")
             .range(pagina * tamanho, (pagina + 1) * tamanho - 1)
             .execute()
@@ -795,6 +795,7 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
     locais_map = opcoes_referencia(localizacoes)
     cat_ids = [""] + list(categorias_map)
     loc_ids = [""] + list(locais_map)
+    subgrupos = ["Não informado", "SOM", "MÍDIA", "CONSELHO", "SAF", "MINISTÉRIO INFANTIL", "UME", "UPA", "UPH", "GRUPO DE MÚSICA"]
     estados = ["", "Novo", "Bom", "Regular", "Ruim"]
     estado_atual = (registro or {}).get("estado_conservacao") or ""
     if estado_atual not in estados:
@@ -821,6 +822,8 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
                 index=cat_ids.index(categoria_atual) if categoria_atual in cat_ids else 0,
                 format_func=lambda x: categorias_map.get(x, "Não informada"),
             )
+            subgrupo_atual = (registro or {}).get("subgrupo") or "Não informado"
+            subgrupo = st.selectbox("Subgrupo do patrimônio", subgrupos, index=subgrupos.index(subgrupo_atual) if subgrupo_atual in subgrupos else 0)
             marca = st.text_input("Marca", value=(registro or {}).get("marca") or "")
             numero_serie = st.text_input("Número de série", value=(registro or {}).get("numero_serie") or "")
             estado = st.selectbox("Estado de conservação", estados, index=estados.index(estado_atual))
@@ -859,6 +862,7 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
         payload = {
             "descricao": descricao.strip(),
             "categoria_id": id_opcional(categoria),
+            "subgrupo": None if subgrupo == "Não informado" else subgrupo,
             "localizacao_id": id_opcional(local),
             "marca": marca.strip() or None,
             "modelo": modelo.strip() or None,
@@ -942,8 +946,11 @@ def pagina_patrimonios(papel):
         categorias_map = opcoes_referencia(categorias)
         locais_map = opcoes_referencia(locais)
         categorias_filtro = ["Todas"] + sorted(set(categorias_map.values()))
+        subgrupos_filtro = ["Todos"] + ["SOM", "MÍDIA", "CONSELHO", "SAF", "MINISTÉRIO INFANTIL", "UME", "UPA", "UPH", "GRUPO DE MÚSICA"]
         situacoes_filtro = ["Todas"] + sorted({r.get("situacao") or "" for r in registros if r.get("situacao")})
-        fc, fs = st.columns(2)
+        fc, fs, fg = st.columns(3)
+        with fg:
+            filtro_subgrupo = st.selectbox("Filtrar subgrupo", subgrupos_filtro)
         with fc:
             filtro_categoria = st.selectbox("Filtrar categoria", categorias_filtro)
         with fs:
@@ -957,10 +964,13 @@ def pagina_patrimonios(papel):
                 continue
             if filtro_situacao != "Todas" and r.get("situacao") != filtro_situacao:
                 continue
+            if filtro_subgrupo != "Todos" and r.get("subgrupo") != filtro_subgrupo:
+                continue
             filtrados.append({
                 "Código": r.get("codigo"),
                 "Descrição": r.get("descricao"),
                 "Categoria": categorias_map.get(r.get("categoria_id"), "—"),
+                "Subgrupo": r.get("subgrupo") or "—",
                 "Localização": locais_map.get(r.get("localizacao_id"), "—"),
                 "Marca": r.get("marca") or "—",
                 "Situação": r.get("situacao") or "—",
@@ -2125,10 +2135,22 @@ def painel_principal(nome):
                 continue
             if prazo < hoje:
                 atrasados.append(emp)
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Empréstimos registrados", len(emprestimos))
-        c2.metric("Devoluções em atraso", len(atrasados))
-        c3.metric("Bens com foto", sum(bool(r.get("foto_caminho")) for r in registros))
+        # Os três quadros usam os patrimônios já carregados do Supabase.
+        valor_total = sum((Decimal(str(r.get("valor_aquisicao") or 0)) for r in registros), Decimal("0"))
+        valor_formatado = f"R$ {valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        indicadores_emprestimos = [
+            ("Valor total do patrimônio", valor_formatado, "Soma dos valores de aquisição informados"),
+            ("Bens emprestados", str(emprestados), "Patrimônios atualmente emprestados"),
+            ("Quantidade total de bens", str(total), "Todos os patrimônios cadastrados"),
+        ]
+        for coluna, (titulo, valor, rodape) in zip(st.columns(3), indicadores_emprestimos):
+            with coluna:
+                st.markdown(
+                    f'<div class="ipb-kpi"><div class="ipb-kpi-label">{escape(titulo)}</div>'
+                    f'<div class="ipb-kpi-value" style="font-size:clamp(1.35rem,2.5vw,2.1rem);overflow-wrap:anywhere">{escape(valor)}</div>'
+                    f'<div class="ipb-kpi-foot">{escape(rodape)}</div></div>',
+                    unsafe_allow_html=True,
+                )
         if atrasados:
             st.warning(f"Há {len(atrasados)} empréstimo(s) com prazo vencido. Consulte a aba Devoluções para conferir os registros.")
             import pandas as pd
