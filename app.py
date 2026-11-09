@@ -434,6 +434,48 @@ html { -webkit-text-size-adjust: 100%; }
   }
 }
 
+
+/* MENU ABERTO: apenas seta branca, sem quadrado, fundo ou borda. */
+[data-testid="stSidebarCollapseButton"] button,
+[data-testid="stSidebarHeader"] button[aria-label*="sidebar"],
+[data-testid="stSidebarHeader"] button[aria-label*="Close"],
+[data-testid="stSidebarHeader"] button[aria-label*="close"] {
+  width: 42px !important;
+  min-width: 42px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  padding: 0 !important;
+}
+[data-testid="stSidebarCollapseButton"] button::after,
+[data-testid="stSidebarHeader"] button[aria-label*="sidebar"]::after,
+[data-testid="stSidebarHeader"] button[aria-label*="Close"]::after,
+[data-testid="stSidebarHeader"] button[aria-label*="close"]::after {
+  content: "❮" !important;
+  color: #fff !important;
+  font: 900 29px/1 Arial, sans-serif !important;
+  text-shadow: 0 1px 3px #002b1d !important;
+}
+[data-testid="stSidebarCollapseButton"] button:hover,
+[data-testid="stSidebarHeader"] button[aria-label*="sidebar"]:hover,
+[data-testid="stSidebarHeader"] button[aria-label*="Close"]:hover,
+[data-testid="stSidebarHeader"] button[aria-label*="close"]:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+@media (max-width:768px) {
+  [data-testid="stSidebarCollapseButton"] button,
+  [data-testid="stSidebarHeader"] button[aria-label*="sidebar"] {
+    width: 42px !important; min-width: 42px !important;
+    height: 44px !important; min-height: 44px !important;
+  }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
