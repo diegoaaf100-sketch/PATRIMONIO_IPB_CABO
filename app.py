@@ -565,6 +565,64 @@ html { -webkit-text-size-adjust: 100%; }
 }
 /* Campos desabilitados mantêm contraste. */
 [data-baseweb="select"] [aria-disabled="true"] {opacity:.75 !important;}
+
+/* CORREÇÃO REFORÇADA: dropdowns do Streamlit/BaseWeb, inclusive portal fora do formulário.
+   A cor permanece igual sem hover, no foco e na opção selecionada. */
+div[data-baseweb="popover"],
+div[data-baseweb="popover"] > div,
+div[data-baseweb="popover"] [data-baseweb="menu"],
+div[data-baseweb="popover"] [role="listbox"],
+ul[role="listbox"],
+ul[data-baseweb="menu"],
+div[data-baseweb="menu"] {
+  background: #103f30 !important;
+  background-color: #103f30 !important;
+  color: #ffffff !important;
+}
+div[data-baseweb="popover"] li,
+div[data-baseweb="popover"] [role="option"],
+ul[role="listbox"] li,
+ul[role="listbox"] [role="option"],
+[data-baseweb="menu"] li,
+[data-baseweb="menu"] [role="option"],
+li[role="option"] {
+  background: #103f30 !important;
+  background-color: #103f30 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+div[data-baseweb="popover"] li *,
+div[data-baseweb="popover"] [role="option"] *,
+ul[role="listbox"] li *,
+ul[role="listbox"] [role="option"] *,
+[data-baseweb="menu"] li *,
+[data-baseweb="menu"] [role="option"] *,
+li[role="option"] * {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+div[data-baseweb="popover"] li:hover,
+div[data-baseweb="popover"] [role="option"]:hover,
+ul[role="listbox"] li:hover,
+ul[role="listbox"] [role="option"]:hover,
+[data-baseweb="menu"] li:hover,
+[data-baseweb="menu"] [role="option"]:hover,
+li[role="option"]:hover,
+li[role="option"][aria-selected="true"] {
+  background: #187855 !important;
+  background-color: #187855 !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
+  background: #164d3d !important;
+  color: #ffffff !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] *,
+[data-testid="stMultiSelect"] [data-baseweb="select"] * {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
