@@ -16,15 +16,23 @@ from postgrest import SyncPostgrestClient
 from supabase import create_client
 
 
+BASE_DIR = Path(__file__).resolve().parent
+LOGO_PATH = BASE_DIR / "assets" / "logo_ipb.png"
+
+# Usa a sarça original como favicon da aba do navegador.
+# O arquivo assets/logo_ipb.png deve permanecer no repositório.
+if LOGO_PATH.is_file():
+    with Image.open(LOGO_PATH) as arquivo_logo:
+        ICONE_ABA = arquivo_logo.copy()
+else:
+    ICONE_ABA = "🌿"  # Fallback se a imagem não estiver disponível.
+
 st.set_page_config(
     page_title="Sistema de Gestão Patrimonial IPB - CABO",
-    page_icon="🌿",
+    page_icon=ICONE_ABA,
     layout="wide",
     initial_sidebar_state="auto",
 )
-
-BASE_DIR = Path(__file__).resolve().parent
-LOGO_PATH = BASE_DIR / "assets" / "logo_ipb.png"
 LOG = logging.getLogger("patrimonio_ipb")
 
 st.markdown("""
