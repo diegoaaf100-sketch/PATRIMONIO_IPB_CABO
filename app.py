@@ -1581,24 +1581,140 @@ def pagina_usuarios_ipb(papel):
     st.caption("Por segurança, sua própria conta não pode ser bloqueada ou rebaixada nesta tela. Alterações de acesso entram em vigor nas próximas consultas autorizadas pelo banco.")
 
 def painel_principal(nome):
-    st.header("Painel principal")
-    st.success(f"Bem-vindo(a), {nome}!")
+    """Visão gerencial baseada nos registros acessíveis ao usuário autenticado."""
+    from collections import Counter
+    from datetime import datetime
+    from html import escape
+
+    st.markdown("""
+    <style>
+      .ipb-dashboard-intro {background:linear-gradient(115deg,#0c6447,#0b4b38);
+        border:1px solid #408e70;border-radius:18px;padding:21px 24px;
+        margin:2px 0 19px;box-shadow:0 12px 30px #001f142c}
+      .ipb-dashboard-intro .eyebrow {color:#aee2c7;font-size:.78rem;
+        letter-spacing:.12em;font-weight:750;text-transform:uppercase}
+      .ipb-dashboard-intro h2 {color:#fff!important;font-size:1.6rem;
+        margin:6px 0 5px;font-weight:750}
+      .ipb-dashboard-intro p {color:#d5ede0!important;margin:0;font-size:.94rem}
+      .ipb-kpi {background:linear-gradient(155deg,#ffffff,#eff7f1);color:#143f30;
+        border:1px solid #b9d6c5;border-radius:17px;padding:19px 17px;
+        min-height:137px;box-shadow:0 7px 22px #001d151e;margin-bottom:9px}
+      .ipb-kpi .ipb-kpi-label {font-size:.83rem;color:#446c57;font-weight:700}
+      .ipb-kpi .ipb-kpi-value {font-size:2.2rem;line-height:1.25;
+        color:#0a5038;font-weight:800;margin-top:11px}
+      .ipb-kpi .ipb-kpi-foot {font-size:.76rem;color:#527561;margin-top:4px}
+      .ipb-section-label {font-size:1.13rem;font-weight:750;color:#e6f6eb;
+        margin:19px 0 11px}
+      .ipb-note {background:#0d513b;border:1px solid #4b8d6e;
+        border-radius:13px;padding:13px 17px;color:#e8f5ed;margin:8px 0}
+      @media(max-width:700px){.ipb-dashboard-intro{padding:16px}
+        .ipb-dashboard-intro h2{font-size:1.3rem}.ipb-kpi{min-height:110px}}
+    </style>
+    """, unsafe_allow_html=True)
+    st.markdown(
+        '<div class="ipb-dashboard-intro"><div class="eyebrow">Visão geral do patrimônio</div>'
+        f'<h2>Bem-vindo(a), {escape(str(nome))}</h2>'
+        '<p>Acompanhe os bens da igreja e os empréstimos em um só lugar.</p></div>',
+        unsafe_allow_html=True,
+    )
     try:
         registros = listar_patrimonios()
     except Exception as erro:
         LOG.warning("Falha ao carregar indicadores: %s", type(erro).__name__)
         st.warning("Não foi possível carregar os indicadores do Supabase.")
         return
-    contagens = {
-        "Patrimônios": len(registros),
-        "Disponíveis": sum(r.get("situacao") == "disponivel" for r in registros),
-        "Emprestados": sum(r.get("situacao") == "emprestado" for r in registros),
-        "Em manutenção": sum(r.get("situacao") == "manutencao" for r in registros),
-    }
-    for coluna, (titulo, valor) in zip(st.columns(4), contagens.items()):
-        with coluna:
-            st.metric(titulo, valor)
-    st.caption("Indicadores calculados a partir dos registros do Supabase.")
+
+    situacoes = Counter(str(r.get("situacao") or "nao_informado").lower() for r in registros)
+    total = len(registros)
+    disponiveis = situacoes.get("disponivel", 0)
+    emprestados = situacoes.get("emprestado", 0)
+    manutencao = situacoes.get("manutencao", 0)
+    indicadores = [
+        ("▦", "Patrimônios cadastrados", total, "Total de bens registrados"),
+        ("✓", "Disponíveis", disponiveis, "Prontos para utilização"),
+        ("↗", "Emprestados", emprestados, "Bens fora da disponibilidade"),
+        ("⚒", "Em manutenção", manutencao, "Bens que exigem atenção"),
+    ]
+    cols = st.columns(4)
+    for col, (icone, titulo, valor, rodape) in zip(cols, indicadores):
+        with col:
+            st.markdown(
+                f'<div class="ipb-kpi"><div class="ipb-kpi-label">{icone} &nbsp;{titulo}</div>'
+                f'<div class="ipb-kpi-value">{valor:,}</div>'
+                f'<div class="ipb-kpi-foot">{rodape}</div></div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown('<div class="ipb-section-label">Distribuição e conservação</div>', unsafe_allow_html=True)
+    grafico_col, conservacao_col = st.columns([1.25, 1])
+    with grafico_col:
+        st.markdown("**Situação dos patrimônios**")
+        categorias_situacao = {
+            "Disponíveis": disponiveis,
+            "Emprestados": emprestados,
+            "Em manutenção": manutencao,
+        }
+        outros = total - sum(categorias_situacao.values())
+        if outros:
+            categorias_situacao["Outras situações"] = outros
+        if total:
+            import pandas as pd
+            st.bar_chart(pd.DataFrame({"Quantidade": categorias_situacao}), color="#68c899", horizontal=True)
+        else:
+            st.info("Nenhum patrimônio cadastrado até o momento.")
+    with conservacao_col:
+        st.markdown("**Estado de conservação**")
+        conservacao = Counter(
+            str(r.get("estado_conservacao") or "Não informado").replace("_", " ").capitalize()
+            for r in registros
+        )
+        if conservacao:
+            import pandas as pd
+            dados_conservacao = pd.DataFrame(
+                [{"Estado": estado, "Quantidade": qtd} for estado, qtd in conservacao.most_common()]
+            )
+            st.dataframe(dados_conservacao, hide_index=True, use_container_width=True)
+        else:
+            st.info("Os estados de conservação aparecerão aqui.")
+
+    st.markdown('<div class="ipb-section-label">Empréstimos e prazos</div>', unsafe_allow_html=True)
+    try:
+        emprestimos = listar_emprestimos()
+    except Exception as erro:
+        LOG.warning("Falha ao carregar resumo de empréstimos: %s", type(erro).__name__)
+        st.info("O resumo de empréstimos está temporariamente indisponível.")
+    else:
+        hoje = date.today()
+        atrasados = []
+        for emp in emprestimos:
+            status = str(emp.get("status") or "").lower()
+            # Não tratar empréstimos devolvidos ou cancelados como pendentes.
+            if status in ("devolvido", "concluido", "cancelado", "finalizado"):
+                continue
+            prevista = str(emp.get("data_prevista_devolucao") or "")[:10]
+            try:
+                prazo = date.fromisoformat(prevista)
+            except ValueError:
+                continue
+            if prazo < hoje:
+                atrasados.append(emp)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Empréstimos registrados", len(emprestimos))
+        c2.metric("Devoluções em atraso", len(atrasados))
+        c3.metric("Bens com foto", sum(bool(r.get("foto_caminho")) for r in registros))
+        if atrasados:
+            st.warning(f"Há {len(atrasados)} empréstimo(s) com prazo vencido. Consulte a aba Devoluções para conferir os registros.")
+            import pandas as pd
+            st.dataframe(pd.DataFrame([
+                {"Recibo": e.get("numero", "—"),
+                 "Previsão de devolução": str(e.get("data_prevista_devolucao") or "")[:10],
+                 "Status": e.get("status") or "Não informado"}
+                for e in atrasados[:10]
+            ]), hide_index=True, use_container_width=True)
+        else:
+            st.markdown('<div class="ipb-note">✓ Nenhum empréstimo com prazo vencido identificado nos registros consultados.</div>', unsafe_allow_html=True)
+        st.caption("Resumo de empréstimos limitado aos 500 registros mais recentes disponíveis na consulta atual.")
+    st.caption("Dados consultados no Supabase. Atualize a página para consultar novamente.")
 
 
 if not st.session_state.get("access_token"):
