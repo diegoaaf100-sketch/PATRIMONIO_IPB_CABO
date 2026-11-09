@@ -367,10 +367,10 @@ html { -webkit-text-size-adjust: 100%; }
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 84px !important;
-  height: 84px !important;
-  min-width: 84px !important;
-  min-height: 84px !important;
+  width: 78px !important;
+  height: 54px !important;
+  min-width: 78px !important;
+  min-height: 54px !important;
   background-color: #24a36e !important;
   border: 3px solid #ffffff !important;
   border-radius: 13px !important;
@@ -391,7 +391,7 @@ html { -webkit-text-size-adjust: 100%; }
   align-items: center !important;
   justify-content: center !important;
   color: #ffffff !important;
-  font: 800 17px/1 Arial, sans-serif !important; letter-spacing: .7px !important;
+  font: 800 12px/1 Arial, sans-serif !important; letter-spacing: .25px !important;
   text-shadow: 0 1px 2px #003e2c !important;
   pointer-events: none !important;
   opacity: 1 !important;
@@ -400,6 +400,15 @@ html { -webkit-text-size-adjust: 100%; }
 [data-testid="stHeader"] button[aria-label*="Open sidebar"]::after,
 [data-testid="stHeader"] button[aria-label*="open sidebar"]::after {
   content: "MENU" !important;
+}
+/* Menu aberto: seta para a esquerda dentro do botão, ao lado do texto menor. */
+[data-testid="stSidebarCollapseButton"] button::after,
+[data-testid="stSidebarHeader"] button[aria-label*="sidebar"]::after {
+  content: "❮  MENU" !important;
+}
+[data-testid="stSidebarHeader"] button[aria-label*="Close"]::after,
+[data-testid="stSidebarHeader"] button[aria-label*="close"]::after {
+  content: "❮  MENU" !important;
 }
 [data-testid="stSidebarCollapsedControl"] button svg,
 [data-testid="stSidebarCollapseButton"] button svg,
@@ -420,8 +429,8 @@ html { -webkit-text-size-adjust: 100%; }
   [data-testid="stSidebarCollapseButton"] button,
   [data-testid="stSidebarHeader"] button[aria-label*="sidebar"],
   [data-testid="stHeader"] button[aria-label*="sidebar"] {
-    width: 80px !important; height: 80px !important;
-    min-width: 80px !important; min-height: 80px !important;
+    width: 76px !important; height: 52px !important;
+    min-width: 76px !important; min-height: 52px !important;
   }
 }
 
