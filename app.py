@@ -20,7 +20,7 @@ st.set_page_config(
     page_title="Sistema de Gestão Patrimonial IPB - CABO",
     page_icon="🌿",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -163,6 +163,125 @@ button[data-testid="stBaseButton-headerNoPadding"]:has(svg[data-testid="stIconMa
     .ipb-banner .ipb-igreja-nome { font-size:1.3rem !important; }
     .ipb-banner .ipb-sistema-nome { font-size:1.05rem !important; }
 }
+
+/* IPB CABO — aperfeiçoamentos responsivos sem alterar a lógica dos módulos. */
+html { -webkit-text-size-adjust: 100%; }
+.stApp { overflow-x: clip; }
+[data-testid="stAppViewBlockContainer"] { max-width: 1320px; }
+[data-testid="stWidgetLabel"] p { line-height: 1.35; }
+[data-testid="stForm"] { min-width: 0; }
+[data-testid="stForm"] button,
+[data-testid="stFileUploader"] button,
+[data-testid="stDownloadButton"] button {
+    border-radius: 11px !important;
+}
+[data-testid="stDataFrame"], [data-testid="stTable"] {
+    max-width: 100%; overflow-x: auto;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label {
+    min-height: 48px !important;
+}
+@media (max-width: 768px) {
+    /* Mais área útil e elementos tocáveis em telefones. */
+    [data-testid="stAppViewBlockContainer"] {
+        padding: 1.1rem .78rem 3rem !important;
+        max-width: 100% !important;
+    }
+    [data-testid="stMainBlockContainer"] { max-width: 100% !important; }
+    [data-testid="stHeader"] { height: 3.3rem; }
+    [data-testid="stSidebar"] { max-width: min(88vw, 330px) !important; }
+    [data-testid="stSidebar"] [data-testid="stRadio"] label {
+        min-height: 50px !important;
+        padding: 12px 13px !important;
+    }
+    .ipb-banner {
+        display: flex !important;
+        align-items: center !important;
+        gap: 11px !important;
+        min-height: unset !important;
+        padding: 14px 12px !important;
+        margin: 6px 0 16px !important;
+        border-radius: 13px !important;
+    }
+    .ipb-banner-logo {
+        width: 55px !important;
+        height: 63px !important;
+        padding-right: 9px !important;
+        flex: 0 0 55px !important;
+    }
+    .ipb-banner-copy { min-width: 0 !important; gap: 5px !important; }
+    .ipb-banner .ipb-igreja-nome {
+        font-size: clamp(.96rem, 3.8vw, 1.22rem) !important;
+        line-height: 1.19 !important;
+        overflow-wrap: anywhere;
+    }
+    .ipb-banner .ipb-sistema-nome {
+        font-size: clamp(.77rem, 3vw, .96rem) !important;
+        line-height: 1.2 !important;
+        overflow-wrap: anywhere;
+    }
+    [data-testid="stForm"] {
+        padding: 13px 11px !important;
+        border-radius: 13px !important;
+    }
+    [data-testid="stForm"] [data-testid="stHorizontalBlock"] {
+        gap: .55rem !important;
+    }
+    [data-testid="stFormSubmitButton"] button,
+    [data-testid="stDownloadButton"] button,
+    [data-testid="stFileUploader"] button {
+        min-height: 46px !important;
+        max-width: 100%;
+    }
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stDateInput"] input,
+    [data-testid="stTextArea"] textarea,
+    [data-baseweb="select"] input {
+        font-size: 16px !important; /* evita zoom involuntário no iPhone */
+        min-height: 43px;
+    }
+    [data-testid="stRadio"] [role="radiogroup"] {
+        flex-wrap: wrap !important;
+        row-gap: .45rem !important;
+    }
+    [data-testid="stRadio"] [role="radiogroup"] label {
+        min-height: 42px;
+    }
+    [data-testid="stTabs"] [data-baseweb="tab-list"] {
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        scrollbar-width: thin;
+    }
+    [data-testid="stTabs"] [data-baseweb="tab"] {
+        flex-shrink: 0;
+        min-height: 45px;
+    }
+    .ipb-dashboard-intro {
+        padding: 14px !important;
+        border-radius: 13px !important;
+    }
+    .ipb-kpi {
+        min-height: 100px !important;
+        padding: 14px 13px !important;
+        border-radius: 13px !important;
+    }
+    .ipb-kpi .ipb-kpi-value { font-size: 1.85rem !important; margin-top: 6px !important; }
+    .ipb-kpi .ipb-kpi-label { font-size: .8rem !important; }
+    [data-testid="stMetric"] { padding: 12px !important; }
+    [data-testid="stMetricValue"] { font-size: 1.6rem !important; }
+    [data-testid="stDataFrame"] { min-width: 0; }
+    .stImage img { max-width: 100%; height: auto; }
+    h1 { font-size: 1.5rem !important; }
+    h2 { font-size: 1.3rem !important; }
+    h3 { font-size: 1.1rem !important; }
+}
+@media (max-width: 380px) {
+    .ipb-banner-logo { width: 43px !important; flex-basis: 43px !important; }
+    .ipb-banner .ipb-igreja-nome { font-size: .92rem !important; }
+    .ipb-banner .ipb-sistema-nome { font-size: .76rem !important; }
+}
+
 </style>
 """, unsafe_allow_html=True)
 
