@@ -351,7 +351,7 @@ html { -webkit-text-size-adjust: 100%; }
 [data-testid="stDataFrame"] { color: #fff !important; }
 
 
-/* BOTÕES DE MENU — seta desenhada por CSS para não depender da cor do ícone Streamlit. */
+/* BOTÕES DE MENU — texto MENU em vez de setas, preservando o clique nativo. */
 [data-testid="stSidebarCollapsedControl"],
 [data-testid="stSidebarCollapseButton"],
 [data-testid="stSidebarHeader"]:has(button[aria-label*="sidebar"]),
@@ -367,10 +367,10 @@ html { -webkit-text-size-adjust: 100%; }
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 52px !important;
-  height: 52px !important;
-  min-width: 52px !important;
-  min-height: 52px !important;
+  width: 84px !important;
+  height: 84px !important;
+  min-width: 84px !important;
+  min-height: 84px !important;
   background-color: #24a36e !important;
   border: 3px solid #ffffff !important;
   border-radius: 13px !important;
@@ -379,19 +379,19 @@ html { -webkit-text-size-adjust: 100%; }
   box-shadow: 0 0 0 2px #063c2c, 0 3px 12px #0008 !important;
   cursor: pointer !important;
 }
-/* A seta branca permanece visível mesmo se o Streamlit trocar SVG por Material Icons. */
+/* O texto branco permanece visível mesmo se o Streamlit trocar SVG por Material Icons. */
 [data-testid="stSidebarCollapsedControl"] button::after,
 [data-testid="stSidebarCollapseButton"] button::after,
 [data-testid="stSidebarHeader"] button[aria-label*="sidebar"]::after,
 [data-testid="stHeader"] button[aria-label*="sidebar"]::after {
-  content: "❮" !important;
+  content: "MENU" !important;
   position: absolute !important;
   inset: 0 !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   color: #ffffff !important;
-  font: 900 30px/1 Arial, sans-serif !important;
+  font: 800 17px/1 Arial, sans-serif !important; letter-spacing: .7px !important;
   text-shadow: 0 1px 2px #003e2c !important;
   pointer-events: none !important;
   opacity: 1 !important;
@@ -399,7 +399,7 @@ html { -webkit-text-size-adjust: 100%; }
 [data-testid="stSidebarCollapsedControl"] button::after,
 [data-testid="stHeader"] button[aria-label*="Open sidebar"]::after,
 [data-testid="stHeader"] button[aria-label*="open sidebar"]::after {
-  content: "❯" !important;
+  content: "MENU" !important;
 }
 [data-testid="stSidebarCollapsedControl"] button svg,
 [data-testid="stSidebarCollapseButton"] button svg,
@@ -420,8 +420,8 @@ html { -webkit-text-size-adjust: 100%; }
   [data-testid="stSidebarCollapseButton"] button,
   [data-testid="stSidebarHeader"] button[aria-label*="sidebar"],
   [data-testid="stHeader"] button[aria-label*="sidebar"] {
-    width: 50px !important; height: 50px !important;
-    min-width: 50px !important; min-height: 50px !important;
+    width: 80px !important; height: 80px !important;
+    min-width: 80px !important; min-height: 80px !important;
   }
 }
 
