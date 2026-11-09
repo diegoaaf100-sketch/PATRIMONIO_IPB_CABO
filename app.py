@@ -673,7 +673,7 @@ def listar_patrimonios():
         resposta = (
             api_usuario(st.session_state["access_token"])
             .from_("patrimonios")
-            .select("id,codigo,descricao,categoria_id,localizacao_id,marca,modelo,numero_serie,data_aquisicao,valor_aquisicao,estado_conservacao,situacao,subgrupo,observacoes,foto_caminho,criado_em,atualizado_em")
+            .select("id,codigo,descricao,categoria_id,localizacao_id,marca,modelo,numero_serie,data_aquisicao,valor_aquisicao,estado_conservacao,situacao,subgrupo,observacoes,foto_caminho,nota_fiscal_caminho,criado_em,atualizado_em")
             .order("codigo")
             .range(pagina * tamanho, (pagina + 1) * tamanho - 1)
             .execute()
@@ -776,6 +776,83 @@ def salvar_foto_patrimonio(patrimonio_id, arquivo):
     return True
 
 
+
+# Notas fiscais armazenadas em bucket privado independente das fotos.
+BUCKET_NOTAS = "ipb-notas-fiscais"
+LIMITE_NOTA = 10 * 1024 * 1024
+
+
+def requisicao_nota(metodo, caminho, dados=None, mime=None):
+    url = (st.secrets["SUPABASE_URL"].rstrip("/") +
+           "/storage/v1/object/" + BUCKET_NOTAS + "/" + quote(caminho, safe="/"))
+    headers = {
+        "apikey": st.secrets["SUPABASE_ANON_KEY"],
+        "Authorization": "Bearer " + st.session_state["access_token"],
+    }
+    if mime:
+        headers["Content-Type"] = mime
+    if metodo == "POST":
+        headers["x-upsert"] = "false"
+    with urlopen(Request(url, data=dados, headers=headers, method=metodo), timeout=45) as resp:
+        return resp.read()
+
+
+def validar_nota_fiscal(arquivo):
+    if arquivo is None:
+        return None
+    dados = arquivo.getvalue()
+    if not dados or len(dados) > LIMITE_NOTA:
+        raise ValueError("A nota fiscal deve ter até 10 MB.")
+    nome = arquivo.name.lower()
+    if nome.endswith(".pdf") and dados.startswith(b"%PDF-"):
+        return dados, "pdf", "application/pdf"
+    from io import BytesIO
+    try:
+        with Image.open(BytesIO(dados)) as imagem:
+            formato = imagem.format
+            imagem.verify()
+    except Exception as exc:
+        raise ValueError("Nota fiscal inválida. Anexe PDF, JPG ou PNG.") from exc
+    tipos = {"JPEG": ("jpg", "image/jpeg"), "PNG": ("png", "image/png")}
+    if formato not in tipos:
+        raise ValueError("Formato inválido. Anexe PDF, JPG ou PNG.")
+    extensao, mime = tipos[formato]
+    return dados, extensao, mime
+
+
+def salvar_nota_fiscal(patrimonio_id, arquivo):
+    dados, extensao, mime = validar_nota_fiscal(arquivo)
+    caminho = f"{patrimonio_id}/{uuid.uuid4().hex}.{extensao}"
+    requisicao_nota("POST", caminho, dados, mime)
+    try:
+        resposta = (api_usuario(st.session_state["access_token"])
+                    .from_("patrimonios").update({"nota_fiscal_caminho": caminho})
+                    .eq("id", patrimonio_id).execute())
+        if not resposta.data:
+            raise RuntimeError("Não foi possível vincular a nota fiscal ao patrimônio.")
+    except Exception:
+        try:
+            requisicao_nota("DELETE", caminho)
+        except Exception:
+            pass
+        raise
+
+
+def exibir_nota_fiscal(registro):
+    caminho = registro.get("nota_fiscal_caminho")
+    if not caminho:
+        st.caption("Nota fiscal não anexada.")
+        return
+    try:
+        dados = requisicao_nota("GET", caminho)
+        extensao = caminho.rsplit(".", 1)[-1].lower()
+        mime = {"pdf": "application/pdf", "jpg": "image/jpeg", "png": "image/png"}.get(extensao, "application/octet-stream")
+        st.download_button("Baixar nota fiscal", dados,
+                           file_name=f"nota_fiscal_{registro.get('codigo') or 'patrimonio'}.{extensao}",
+                           mime=mime, key=f"nota_fiscal_download_{registro['id']}")
+    except Exception:
+        st.warning("Não foi possível acessar a nota fiscal. Confira as permissões do Storage.")
+
 def exibir_foto_patrimonio(registro):
     caminho = registro.get("foto_caminho")
     if not caminho:
@@ -840,6 +917,10 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
         observacoes = st.text_area("Observações", value=(registro or {}).get("observacoes") or "")
         foto = st.file_uploader("Foto do patrimônio (opcional, JPG, PNG ou WEBP — até 5 MB)",
                                 type=["jpg", "jpeg", "png", "webp"], key="foto_" + chave)
+        nota_fiscal = st.file_uploader("Nota fiscal (opcional, PDF, JPG ou PNG — até 10 MB)",
+                                      type=["pdf", "jpg", "jpeg", "png"], key="nf_" + chave)
+        if edicao and registro.get("nota_fiscal_caminho"):
+            st.caption("A nota fiscal atual será mantida se você não anexar outra.")
         if edicao and registro.get("foto_caminho"):
             st.caption("Se não selecionar outra imagem, a foto atual será mantida.")
         if edicao:
@@ -855,6 +936,7 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
         return
     try:
         validar_foto(foto)
+        validar_nota_fiscal(nota_fiscal)
     except ValueError as erro:
         st.error(str(erro))
         return
@@ -888,6 +970,12 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
                 except Exception as erro_foto:
                     st.warning(f"Dados atualizados, mas a foto não foi salva ({type(erro_foto).__name__}). Tente novamente em Editar patrimônio.")
                     return
+            if nota_fiscal is not None:
+                try:
+                    salvar_nota_fiscal(registro["id"], nota_fiscal)
+                except Exception as erro_nf:
+                    st.warning(f"Dados atualizados, mas a nota fiscal não foi salva ({type(erro_nf).__name__}). Tente novamente em Editar patrimônio.")
+                    return
             st.session_state["mensagem_patrimonio"] = "Patrimônio atualizado com sucesso!"
         else:
             # O trigger BEFORE INSERT do Supabase substitui este código temporário.
@@ -904,6 +992,12 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
                     salvar_foto_patrimonio(novo_id, foto)
                 except Exception as erro_foto:
                     st.warning(f"Patrimônio cadastrado, mas a foto não foi salva ({type(erro_foto).__name__}). Abra Editar patrimônio para tentar novamente.")
+                    return
+            if nota_fiscal is not None:
+                try:
+                    salvar_nota_fiscal(novo_id, nota_fiscal)
+                except Exception as erro_nf:
+                    st.warning(f"Patrimônio cadastrado, mas a nota fiscal não foi salva ({type(erro_nf).__name__}). Abra Editar patrimônio para tentar novamente.")
                     return
             codigo = resposta.data[0].get("codigo", "")
             if codigo == "PENDENTE":
@@ -985,6 +1079,8 @@ def pagina_patrimonios(papel):
                 format_func=lambda i: f"{por_id_foto[i].get('codigo','')} — {por_id_foto[i].get('descricao','')}",
                 key="visualizar_foto_bem")
             exibir_foto_patrimonio(por_id_foto[foto_id])
+            st.markdown("#### Nota fiscal do patrimônio")
+            exibir_nota_fiscal(por_id_foto[foto_id])
     if aba == "Excluir patrimônio" and papel == "admin":
         st.subheader("Excluir patrimônio")
         st.warning("A exclusão é definitiva. Bens com histórico de empréstimos ou documentos vinculados não podem ser excluídos por esta tela.")
