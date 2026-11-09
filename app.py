@@ -521,6 +521,50 @@ html { -webkit-text-size-adjust: 100%; }
  .st-key-navegacao_ipb [data-testid="stRadio"] label,
  [data-testid="stRadio"].st-key-navegacao_ipb label {min-height:48px !important; padding:9px 12px !important;}
 }
+
+/* CORREÇÃO DE LEGIBILIDADE — caixas de seleção, abertas ou sem hover. */
+[data-baseweb="select"] > div,
+[data-baseweb="select"] > div:hover,
+[data-baseweb="select"] > div:focus-within {
+  background-color: #164d3d !important;
+  border-color: #83c6a8 !important;
+  color: #ffffff !important;
+}
+[data-baseweb="select"] input,
+[data-baseweb="select"] [data-testid="stMarkdownContainer"],
+[data-baseweb="select"] span {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+/* Listas suspensas do BaseWeb são renderizadas fora dos formulários. */
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="popover"] [data-baseweb="menu"],
+[data-baseweb="popover"] ul,
+[data-baseweb="menu"] {
+  background-color: #103f30 !important;
+  color: #ffffff !important;
+}
+[data-baseweb="popover"] [role="option"],
+[data-baseweb="popover"] li,
+[data-baseweb="menu"] [role="option"] {
+  background-color: #103f30 !important;
+  color: #ffffff !important;
+}
+[data-baseweb="popover"] [role="option"] *,
+[data-baseweb="popover"] li *,
+[data-baseweb="menu"] [role="option"] * {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+[data-baseweb="popover"] [role="option"]:hover,
+[data-baseweb="popover"] [role="option"][aria-selected="true"],
+[data-baseweb="popover"] li:hover,
+[data-baseweb="menu"] [role="option"]:hover {
+  background-color: #187855 !important;
+  color: #ffffff !important;
+}
+/* Campos desabilitados mantêm contraste. */
+[data-baseweb="select"] [aria-disabled="true"] {opacity:.75 !important;}
 </style>
 """, unsafe_allow_html=True)
 
