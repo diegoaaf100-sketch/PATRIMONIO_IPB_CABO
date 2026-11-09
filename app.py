@@ -484,6 +484,43 @@ html { -webkit-text-size-adjust: 100%; }
   }
 }
 
+
+/* Menu principal horizontal: estilo profissional e responsivo */
+.st-key-navegacao_ipb [data-testid="stRadio"] > div[role="radiogroup"],
+[data-testid="stRadio"].st-key-navegacao_ipb > div[role="radiogroup"] {
+  display:flex !important; flex-wrap:nowrap !important; gap:0 !important;
+  overflow-x:auto !important; padding:5px !important;
+  background:linear-gradient(115deg,#064333,#022d23) !important;
+  border:1px solid #398267 !important; border-radius:17px !important;
+  box-shadow:0 8px 22px #001e1659 !important;
+  scrollbar-width:thin;
+}
+.st-key-navegacao_ipb [data-testid="stRadio"] label,
+[data-testid="stRadio"].st-key-navegacao_ipb label {
+  flex:1 0 auto !important; min-height:62px !important;
+  padding:12px 15px !important; border-radius:12px !important;
+  display:flex !important; align-items:center !important; justify-content:center !important;
+  background:transparent !important; border:1px solid transparent !important;
+  cursor:pointer !important; transition:background .15s ease !important;
+}
+.st-key-navegacao_ipb [data-testid="stRadio"] label:hover,
+[data-testid="stRadio"].st-key-navegacao_ipb label:hover {background:#14674d !important;}
+.st-key-navegacao_ipb [data-testid="stRadio"] label:has(input:checked),
+[data-testid="stRadio"].st-key-navegacao_ipb label:has(input:checked) {
+  background:linear-gradient(180deg,#08a66c,#087b50) !important;
+  border-color:#3ad49b !important; box-shadow:inset 0 -3px 0 #c7ffdf !important;
+}
+.st-key-navegacao_ipb [data-testid="stRadio"] label p,
+[data-testid="stRadio"].st-key-navegacao_ipb label p {
+  color:white !important; font-size:.88rem !important; font-weight:700 !important;
+  white-space:nowrap !important;
+}
+.st-key-navegacao_ipb [data-testid="stRadio"] label [data-baseweb="radio"] > div:first-child,
+[data-testid="stRadio"].st-key-navegacao_ipb label [data-baseweb="radio"] > div:first-child {display:none !important;}
+@media(max-width:768px){
+ .st-key-navegacao_ipb [data-testid="stRadio"] label,
+ [data-testid="stRadio"].st-key-navegacao_ipb label {min-height:48px !important; padding:9px 12px !important;}
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -2028,24 +2065,6 @@ with st.sidebar:
     st.write("**Usuário:**", nome)
     st.caption("Perfil: " + papel.upper())
     st.divider()
-    paginas = ["Painel principal", "Patrimônios", "Empréstimos", "Devoluções", "Documentos assinados", "Histórico por patrimônio", "Relatórios"]
-    if papel == "admin":
-        paginas.append("Usuários")
-    icones_menu = {
-        "Painel principal": "▦",
-        "Patrimônios": "▣",
-        "Empréstimos": "↗",
-        "Devoluções": "↙",
-        "Documentos assinados": "▤",
-        "Histórico por patrimônio": "◷",
-        "Relatórios": "▥",
-        "Usuários": "♙",
-    }
-    pagina = st.radio(
-        "Navegação", paginas, label_visibility="collapsed",
-        format_func=lambda item: f"{icones_menu.get(item, '•')}   {item}",
-        key="navegacao_ipb"
-    )
     st.divider()
     if st.button("Sair do sistema", use_container_width=True):
         limpar_sessao()
@@ -2074,6 +2093,30 @@ st.markdown(
     + '<p class="ipb-sistema-nome">Sistema de Gestão Patrimonial</p>'
     + '</div></div>',
     unsafe_allow_html=True,
+)
+
+
+# Navegação horizontal: mantém os mesmos módulos e permissões do menu original.
+paginas = ["Painel principal", "Patrimônios", "Empréstimos", "Devoluções", "Documentos assinados", "Histórico por patrimônio", "Relatórios"]
+if papel == "admin":
+    paginas.append("Usuários")
+icones_menu = {
+    "Painel principal": "▦",
+    "Patrimônios": "▣",
+    "Empréstimos": "↗",
+    "Devoluções": "↙",
+    "Documentos assinados": "▤",
+    "Histórico por patrimônio": "◷",
+    "Relatórios": "▥",
+    "Usuários": "♙",
+}
+
+pagina = st.radio(
+    "Navegação principal", paginas,
+    horizontal=True,
+    label_visibility="collapsed",
+    format_func=lambda item: f"{icones_menu.get(item, '•')}  {item}",
+    key="navegacao_ipb",
 )
 
 if pagina == "Painel principal":
