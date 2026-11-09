@@ -929,13 +929,47 @@ def pagina_patrimonios(papel):
         return
 
     pode_gerenciar = papel in ("admin", "gestor")
-    abas = ["Consultar patrimônios"] + (["Cadastrar patrimônio", "Editar patrimônio"] if pode_gerenciar else [])
+    abas = ["Consultar patrimônios"] + (["Cadastrar patrimônio", "Editar patrimônio"] if pode_gerenciar else []) + (["Excluir patrimônio"] if papel == "admin" else [])
     if st.session_state.get("mensagem_patrimonio"):
         st.success(st.session_state.pop("mensagem_patrimonio"))
     # Aplicar a mudança de aba antes de instanciar o widget.
     aba_pendente = st.session_state.pop("patrimonio_aba_pendente", None)
     if aba_pendente in abas:
         st.session_state["patrimonio_aba"] = aba_pendente
+    st.markdown("""<style>
+    /* Mesmo padrão para os menus internos de patrimônios, empréstimos e devoluções. */
+    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] {
+        display: flex !important; flex-flow: row nowrap !important;
+        gap: 6px !important; width: 100% !important;
+    }
+    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label {
+        flex: 1 1 0 !important; min-width: 0 !important;
+        display: flex !important; align-items: center !important;
+        justify-content: center !important;
+        padding: 10px 5px !important; border: 1px solid #43816b !important;
+        border-radius: 9px !important; background: #0b4b39 !important;
+        margin: 0 !important;
+    }
+    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label:has(input:checked) {
+        background: #147d55 !important; border-color: #8de0b2 !important;
+    }
+    :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label p {
+        font-size: clamp(11px, 1.05vw, 15px) !important;
+        font-weight: 650 !important; color: white !important;
+        white-space: nowrap !important;
+    }
+    @media (max-width: 768px) {
+        :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] {
+            overflow-x: auto !important; padding-bottom: 5px !important;
+        }
+        :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label {
+            flex: 0 0 auto !important; padding: 9px 10px !important;
+        }
+        :is(.st-key-patrimonio_aba, .st-key-emprestimo_aba, .st-key-devolucao_aba) [role="radiogroup"] label p {
+            font-size: 13px !important;
+        }
+    }
+    </style>""", unsafe_allow_html=True)
     aba = st.radio("Área de patrimônios", abas, horizontal=True, key="patrimonio_aba")
     if aba == "Consultar patrimônios":
         busca = st.text_input("Pesquisar", placeholder="Código, descrição, marca, modelo ou número de série")
@@ -975,6 +1009,48 @@ def pagina_patrimonios(papel):
                 format_func=lambda i: f"{por_id_foto[i].get('codigo','')} — {por_id_foto[i].get('descricao','')}",
                 key="visualizar_foto_bem")
             exibir_foto_patrimonio(por_id_foto[foto_id])
+    if aba == "Excluir patrimônio" and papel == "admin":
+        st.subheader("Excluir patrimônio")
+        st.warning("A exclusão é definitiva. Bens com histórico de empréstimos ou documentos vinculados não podem ser excluídos por esta tela.")
+        if not registros:
+            st.info("Não há patrimônios cadastrados para excluir.")
+        else:
+            por_id_exclusao = {r["id"]: r for r in registros}
+            id_exclusao = st.selectbox(
+                "Selecione o patrimônio que deseja excluir",
+                list(por_id_exclusao),
+                format_func=lambda i: f"{por_id_exclusao[i].get('codigo', '')} — {por_id_exclusao[i].get('descricao', '')}",
+                key="patrimonio_excluir_id",
+            )
+            bem_exclusao = por_id_exclusao[id_exclusao]
+            st.write(f"**Código:** {bem_exclusao.get('codigo') or '—'}")
+            st.write(f"**Descrição:** {bem_exclusao.get('descricao') or '—'}")
+            confirmar_exclusao = st.checkbox(
+                "Confirmo que desejo excluir definitivamente este patrimônio.",
+                key=f"confirmar_exclusao_{id_exclusao}",
+            )
+            if st.button("Excluir patrimônio definitivamente", type="primary",
+                         disabled=not confirmar_exclusao, key="executar_exclusao_patrimonio"):
+                try:
+                    cliente = api_usuario(st.session_state["access_token"])
+                    itens_vinculados = (cliente.from_("itens_emprestimo")
+                        .select("id").eq("patrimonio_id", id_exclusao).limit(1).execute()).data or []
+                    anexos_vinculados = (cliente.from_("anexos_ipb")
+                        .select("id").eq("patrimonio_id", id_exclusao).limit(1).execute()).data or []
+                    if itens_vinculados or anexos_vinculados:
+                        st.error("Exclusão bloqueada: este patrimônio possui empréstimos ou documentos vinculados. Preserve o histórico.")
+                    else:
+                        resposta_exclusao = (cliente.from_("patrimonios")
+                            .delete().eq("id", id_exclusao).select("id").execute())
+                        if resposta_exclusao.data:
+                            st.session_state["mensagem_patrimonio"] = "Patrimônio excluído com sucesso."
+                            st.session_state["patrimonio_aba_pendente"] = "Consultar patrimônios"
+                            st.rerun()
+                        else:
+                            st.error("A exclusão não foi confirmada pelo banco. Verifique as permissões do administrador (RLS).")
+                except Exception as erro:
+                    LOG.warning("Falha ao excluir patrimônio: %s", type(erro).__name__)
+                    st.error(f"Não foi possível excluir o patrimônio ({type(erro).__name__}). Verifique vínculos e permissões do banco.")
     if pode_gerenciar:
         if aba == "Cadastrar patrimônio":
             formulario_patrimonio("form_cadastro_patrimonio", categorias, locais)
