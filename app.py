@@ -696,9 +696,9 @@ def _cifra_cookie():
 def gerenciador_cookies():
     if _cifra_cookie() is None:
         return None
-    if "_ipb_cookie_controller" not in st.session_state:
-        st.session_state["_ipb_cookie_controller"] = CookieController()
-    return st.session_state["_ipb_cookie_controller"]
+    # Componente deve ser instanciado em cada execução do Streamlit para
+    # receber o valor retornado pelo navegador após um recarregamento (F5).
+    return CookieController(key="ipb_cabo_cookie_controller")
 
 
 def persistir_sessao():
@@ -708,7 +708,10 @@ def persistir_sessao():
         return
     try:
         valor = _cifra_cookie().encrypt(token.encode("utf-8")).decode("ascii")
-        controller.set(COOKIE_NOME, valor)
+        controller.set(COOKIE_NOME, valor, max_age=60 * 60 * 24 * 30)
+        # O componente grava no navegador de forma assíncrona. Sem esta espera,
+        # st.rerun() pode interromper a operação antes da gravação.
+        time.sleep(0.45)
     except Exception:
         LOG.exception("Falha ao persistir cookie de autenticação")
         st.warning("O login foi realizado, mas não foi possível salvar a sessão neste navegador.")
@@ -726,11 +729,20 @@ def restaurar_sessao():
         LOG.exception("Não foi possível ler o cookie de autenticação")
         return
     if not valor:
+        # O cookie é lido por um componente frontend: após F5 sua resposta
+        # pode chegar somente depois da primeira execução do script.
+        tentativas = st.session_state.get("_ipb_leitura_cookie_tentativas", 0)
+        if tentativas < 4:
+            st.session_state["_ipb_leitura_cookie_tentativas"] = tentativas + 1
+            time.sleep(0.4)
+            st.rerun()
         return
+    st.session_state.pop("_ipb_leitura_cookie_tentativas", None)
     try:
         refresh = _cifra_cookie().decrypt(valor.encode("ascii")).decode("utf-8")
     except (InvalidToken, ValueError, TypeError):
         controller.remove(COOKIE_NOME)
+        time.sleep(0.35)
         return
     try:
         resposta = cliente_auth().auth.refresh_session(refresh)
@@ -751,6 +763,7 @@ def restaurar_sessao():
         LOG.exception("Não foi possível restaurar a sessão do navegador")
         try:
             controller.remove(COOKIE_NOME)
+            time.sleep(0.35)
         except Exception:
             LOG.exception("Não foi possível remover o cookie inválido")
 
@@ -760,10 +773,12 @@ def limpar_sessao():
     if controller is not None:
         try:
             controller.remove(COOKIE_NOME)
+            time.sleep(0.45)
         except Exception:
             LOG.exception("Falha ao remover cookie no logout")
     for chave in ("access_token", "refresh_token", "user_id", "profile", "expires_at"):
         st.session_state.pop(chave, None)
+    st.session_state["_ipb_leitura_cookie_tentativas"] = 4
 
 
 def autenticar(email, senha):
@@ -780,6 +795,7 @@ def autenticar(email, senha):
         "profile": perfil,
         "expires_at": resposta.session.expires_at or (int(time.time()) + resposta.session.expires_in),
     })
+    st.session_state.pop("_ipb_leitura_cookie_tentativas", None)
     persistir_sessao()
 
 
