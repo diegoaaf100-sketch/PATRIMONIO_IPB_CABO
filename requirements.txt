@@ -4,4 +4,4 @@ postgrest
 Pillow
 reportlab
 xlsxwriter
-streamlit-cookies-manager>=0.2.0,<1.0\n
+streamlit-cookies-manager>=0.2.0,<1.0
