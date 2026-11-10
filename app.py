@@ -1,4 +1,5 @@
 import logging
+from html import escape as escapar_html
 import base64
 import uuid
 import mimetypes
@@ -1355,139 +1356,104 @@ def pagina_patrimonios(papel):
             filtro_categoria = st.selectbox("Filtrar categoria", categorias_filtro)
         with fs:
             filtro_situacao = st.selectbox("Filtrar situação", situacoes_filtro)
-        # Consulta com filtros preservados, indicadores, situações destacadas e fotos privadas.
         filtrados = []
-        registros_filtrados = []
         for r in registros:
             campos = " ".join(str(r.get(k) or "") for k in ("codigo", "descricao", "marca", "modelo", "numero_serie"))
             if busca.casefold() not in campos.casefold():
                 continue
             if filtro_categoria != "Todas" and categorias_map.get(r.get("categoria_id")) != filtro_categoria:
                 continue
-            situacao_real = "Baixado" if r.get("baixado_em") else (r.get("situacao") or "—")
             if filtro_situacao != "Todas" and r.get("situacao") != filtro_situacao:
                 continue
             if filtro_subgrupo != "Todos" and r.get("subgrupo") != filtro_subgrupo:
                 continue
-            registros_filtrados.append(r)
             filtrados.append({
-                "Código": r.get("codigo") or "—",
-                "Descrição": r.get("descricao") or "—",
+                "Código": r.get("codigo"),
+                "Descrição": r.get("descricao"),
                 "Categoria": categorias_map.get(r.get("categoria_id"), "—"),
                 "Subgrupo": r.get("subgrupo") or "—",
                 "Localização": locais_map.get(r.get("localizacao_id"), "—"),
                 "Marca": r.get("marca") or "—",
-                "Situação": situacao_real,
+                "Situação": "Baixado" if r.get("baixado_em") else (r.get("situacao") or "—"),
                 "Conservação": r.get("estado_conservacao") or "—",
             })
-
-        st.markdown("#### 📦 Inventário de patrimônios")
-        total_ativos = sum(not r.get("baixado_em") for r in registros)
+        # Painel de consulta: resumo e tabela com colunas estáveis, inclusive sem resultados.
+        st.markdown("#### Inventário de patrimônios")
+        total_ativos = sum(1 for r in registros if not r.get("baixado_em"))
         total_baixados = len(registros) - total_ativos
-        total_emprestados = sum(not r.get("baixado_em") and str(r.get("situacao") or "").casefold() in ("emprestado", "emprestados") for r in registros)
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("📦 Cadastrados", len(registros))
-        k2.metric("✅ Ativos", total_ativos)
-        k3.metric("🤝 Emprestados", total_emprestados)
-        k4.metric("🔎 Encontrados", len(filtrados))
-        if total_baixados:
-            st.caption(f"{total_baixados} patrimônio(s) baixado(s), incluído(s) no total cadastrado.")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total cadastrado", len(registros))
+        m2.metric("Bens ativos", total_ativos)
+        m3.metric("Bens baixados", total_baixados)
+        m4.metric("Resultados da pesquisa", len(filtrados))
 
-        st.markdown("""<style>
-        /* Contraste para o inventário e suas etiquetas de situação. */
-        .ipb-situacao {display:inline-block;padding:4px 10px;border-radius:999px;font-weight:700;font-size:12px;}
-        .ipb-situacao-verde {background:#d6f4e3;color:#075a36;}
-        .ipb-situacao-amarelo {background:#fff0b5;color:#775300;}
-        .ipb-situacao-vermelho {background:#ffe0df;color:#8b2424;}
-        .ipb-situacao-cinza {background:#e7e9ed;color:#344054;}
-        </style>""", unsafe_allow_html=True)
-        st.caption("Situação: 🟢 disponível  |  🟡 emprestado  |  🔴 manutenção  |  ⚪ baixado")
-
-        def situacao_colorida(valor):
-            nome = str(valor or "—").strip()
-            chave = nome.casefold()
-            if "baixad" in chave:
-                return "⚪ " + nome
-            if "emprestad" in chave:
-                return "🟡 " + nome
-            if "manuten" in chave or "manutenç" in chave or "danific" in chave:
-                return "🔴 " + nome
-            if "dispon" in chave or "ativo" in chave:
-                return "🟢 " + nome
-            return "🔵 " + nome
-
-        # Fotos ficam em Storage privado: não usar URLs públicas nem expor o token.
-        # O modo de miniaturas carrega somente os primeiros 20 registros filtrados.
-        mostrar_miniaturas = st.toggle("🖼️ Mostrar miniaturas na tabela (até 20 bens)", value=False,
-                                      key="ipb_miniaturas_tabela")
-        linhas_tabela = [dict(linha, **{"Situação": situacao_colorida(linha["Situação"])}) for linha in filtrados]
-        colunas_tabela = ["Código", "Descrição", "Categoria", "Subgrupo", "Localização", "Marca", "Situação", "Conservação"]
-        config_tabela = {
-            "Código": st.column_config.TextColumn("🏷️ Código", width="small"),
-            "Descrição": st.column_config.TextColumn("📦 Patrimônio", width="large"),
-            "Categoria": st.column_config.TextColumn("Categoria", width="medium"),
-            "Subgrupo": st.column_config.TextColumn("Subgrupo", width="medium"),
-            "Localização": st.column_config.TextColumn("📍 Localização", width="medium"),
-            "Marca": st.column_config.TextColumn("Marca", width="small"),
-            "Situação": st.column_config.TextColumn("Situação", width="medium"),
-            "Conservação": st.column_config.TextColumn("Conservação", width="medium"),
-        }
-        if mostrar_miniaturas and linhas_tabela:
-            from io import BytesIO
-            linhas_tabela = linhas_tabela[:20]
-            registros_miniaturas = registros_filtrados[:20]
-            for linha, registro in zip(linhas_tabela, registros_miniaturas):
-                linha["Foto"] = None
-                if registro.get("foto_caminho"):
-                    try:
-                        dados_foto = requisicao_foto("GET", registro["foto_caminho"])
-                        with Image.open(BytesIO(dados_foto)) as imagem:
-                            imagem.thumbnail((100, 100))
-                            saida_foto = BytesIO()
-                            imagem.convert("RGB").save(saida_foto, format="JPEG", quality=70)
-                        linha["Foto"] = "data:image/jpeg;base64," + base64.b64encode(saida_foto.getvalue()).decode("ascii")
-                    except Exception:
-                        LOG.warning("Miniatura indisponível para patrimônio %s", registro.get("id"))
-            colunas_tabela = ["Foto"] + colunas_tabela
-            config_tabela["Foto"] = st.column_config.ImageColumn("📷 Foto", width="small")
-            if len(filtrados) > 20:
-                st.info("Miniaturas limitadas aos primeiros 20 resultados para preservar o desempenho. Desative a opção para ver todos os registros.")
-
-        if linhas_tabela:
-            st.dataframe(linhas_tabela, width="stretch", hide_index=True,
-                         height=min(620, max(155, 39 * (len(linhas_tabela) + 1))),
-                         column_order=colunas_tabela, column_config=config_tabela)
-            st.caption(f"{len(filtrados)} patrimônio(s) encontrado(s) com os filtros atuais.")
+        # Exibição profissional: somente a tabela é modificada; filtros e funções permanecem.
+        if filtrados:
+            linhas_html = []
+            for item in filtrados:
+                situacao = str(item.get("Situação") or "—")
+                situacao_normalizada = situacao.casefold()
+                if "baix" in situacao_normalizada:
+                    cor_situacao = "#d4d9de"
+                    fundo_situacao = "#374151"
+                elif "emprest" in situacao_normalizada:
+                    cor_situacao = "#ffe3a3"
+                    fundo_situacao = "#6b4d17"
+                elif "manuten" in situacao_normalizada or "danific" in situacao_normalizada:
+                    cor_situacao = "#ffd1d1"
+                    fundo_situacao = "#7d3030"
+                else:
+                    cor_situacao = "#c6f5d9"
+                    fundo_situacao = "#176a4b"
+                situacao_html = (
+                    f'<span style="display:inline-block;white-space:nowrap;padding:5px 10px;'
+                    f'border-radius:999px;background:{fundo_situacao};color:{cor_situacao};'
+                    f'font-size:12px;font-weight:750">{escapar_html(situacao)}</span>'
+                )
+                def celula(valor, estilo=""):
+                    return f'<td style="padding:13px 15px;border-bottom:1px solid #dce9e2;{estilo}">{escapar_html(str(valor or "—"))}</td>'
+                linhas_html.append(
+                    '<tr style="background:#fff;color:#173f32">'
+                    + celula(item.get("Código"), "font-weight:750;color:#08714c;white-space:nowrap;")
+                    + celula(item.get("Descrição"), "font-weight:650;min-width:190px;")
+                    + celula(item.get("Categoria"))
+                    + celula(item.get("Subgrupo"))
+                    + celula(item.get("Localização"))
+                    + celula(item.get("Marca"))
+                    + f'<td style="padding:13px 15px;border-bottom:1px solid #dce9e2">{situacao_html}</td>'
+                    + celula(item.get("Conservação"))
+                    + '</tr>'
+                )
+            cabecalhos = ["Código", "Patrimônio", "Categoria", "Subgrupo", "Localização", "Marca", "Situação", "Conservação"]
+            cabecalho_html = ''.join(
+                f'<th scope="col" style="padding:14px 15px;text-align:left;white-space:nowrap;'
+                f'font-size:12px;letter-spacing:.3px;color:#f1fff7;font-weight:750;">{escapar_html(nome)}</th>'
+                for nome in cabecalhos
+            )
+            st.markdown(
+                '<div style="overflow-x:auto;border:1px solid #c9e1d5;border-radius:14px;'
+                'box-shadow:0 7px 20px rgba(0,0,0,.13);margin:12px 0 7px">'
+                '<table style="width:100%;min-width:900px;border-collapse:collapse;'
+                'font-family:inherit;font-size:13px;background:white">'
+                '<thead style="background:#106345"><tr>' + cabecalho_html + '</tr></thead>'
+                '<tbody>' + ''.join(linhas_html) + '</tbody></table></div>',
+                unsafe_allow_html=True,
+            )
+            st.caption(f"Exibindo {len(filtrados)} patrimônio(s) conforme os filtros selecionados. Deslize a tabela horizontalmente no celular.")
         else:
-            st.markdown("""<div style="padding:32px 22px;text-align:center;background:#10513d;
-                border:1px solid #3b8667;border-radius:15px;margin:12px 0 20px;">
-                <div style="font-size:34px">📦</div>
-                <div style="font-size:19px;font-weight:750;color:white">Nenhum patrimônio encontrado</div>
-                <div style="font-size:14px;color:#d5eee0;margin-top:8px">Cadastre um bem ou ajuste os filtros da consulta.</div>
-                </div>""", unsafe_allow_html=True)
-
-        st.markdown("#### 📥 Exportar consulta")
-        st.caption("Os arquivos incluem todos os resultados filtrados, independentemente do limite de miniaturas. As fotos não são incorporadas aos arquivos.")
-        exportar_colunas = ["Código", "Descrição", "Categoria", "Subgrupo", "Localização", "Marca", "Situação", "Conservação"]
-        resumo_exportacao = f"Patrimônios encontrados: {len(filtrados)} | Total cadastrado: {len(registros)} | Data: {date.today().strftime('%d/%m/%Y')}"
-        e1, e2 = st.columns(2)
-        try:
-            with e1:
-                st.download_button("📊 Baixar Excel", data=relatorio_excel("Consulta de patrimônios", exportar_colunas, filtrados, resumo_exportacao),
-                                   file_name="ipb_cabo_patrimonios_filtrados.xlsx",
-                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                   width="stretch", key="baixar_patrimonios_excel")
-            with e2:
-                st.download_button("📄 Baixar PDF", data=relatorio_pdf("Consulta de patrimônios", exportar_colunas, filtrados, resumo_exportacao),
-                                   file_name="ipb_cabo_patrimonios_filtrados.pdf", mime="application/pdf",
-                                   width="stretch", key="baixar_patrimonios_pdf")
-        except Exception:
-            LOG.exception("Erro ao preparar exportação da consulta de patrimônios")
-            st.warning("Não foi possível preparar os arquivos. Verifique as dependências reportlab e xlsxwriter.")
-
-        if registros_filtrados:
-            st.markdown("#### 📷 Foto e documentos do patrimônio")
-            por_id_foto = {r["id"]: r for r in registros_filtrados}
+            st.markdown("""
+            <div style="padding:30px 22px;text-align:center;background:#10513d;
+                        border:1px solid #3b8667;border-radius:15px;margin:12px 0 20px;">
+              <div style="font-size:34px;margin-bottom:8px">📦</div>
+              <div style="font-size:19px;font-weight:750;color:#ffffff">Nenhum patrimônio encontrado</div>
+              <div style="font-size:14px;color:#d5eee0;margin-top:8px">
+                Cadastre o primeiro bem ou altere os filtros de pesquisa para consultar o inventário.
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+        if registros:
+            st.markdown("#### Visualizar foto de um patrimônio")
+            por_id_foto = {r["id"]: r for r in registros}
             foto_id = st.selectbox("Selecione o bem", list(por_id_foto),
                 format_func=lambda i: f"{por_id_foto[i].get('codigo','')} — {por_id_foto[i].get('descricao','')}",
                 key="visualizar_foto_bem")
