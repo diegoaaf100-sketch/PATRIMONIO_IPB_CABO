@@ -638,6 +638,37 @@ li[role="option"][aria-selected="true"] {
   -webkit-text-fill-color: #ffffff !important;
 }
 
+
+/* IPB CABO — avisos em superfície clara: texto verde-escuro sempre legível.
+   Abrange st.info, st.warning e caixas informativas semelhantes.
+   Erros e confirmações mantêm suas cores de status. */
+[data-testid="stAlert"]:has([data-testid="stAlertContentInfo"]),
+[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]),
+[data-testid="stAlert"]:has([data-testid="stAlertContent"]),
+[data-testid="stAlert"]:has([data-baseweb="notification"]) {
+  color: #073f30 !important;
+}
+/* Aplica a cor diretamente ao conteúdo dos avisos, superando regras globais de p e Markdown. */
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"],
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] *,
+[data-testid="stAlert"] [data-testid="stAlertContent"],
+[data-testid="stAlert"] [data-testid="stAlertContent"] *,
+[data-testid="stAlert"] [data-testid="stAlertContentInfo"],
+[data-testid="stAlert"] [data-testid="stAlertContentInfo"] *,
+[data-testid="stAlert"] [data-testid="stAlertContentWarning"],
+[data-testid="stAlert"] [data-testid="stAlertContentWarning"] * {
+  color: #073f30 !important;
+  -webkit-text-fill-color: #073f30 !important;
+}
+/* Não modifica os ícones nem o texto de avisos de erro ou sucesso. */
+[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) [data-testid="stMarkdownContainer"],
+[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) [data-testid="stMarkdownContainer"] *,
+[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) [data-testid="stMarkdownContainer"],
+[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) [data-testid="stMarkdownContainer"] * {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
