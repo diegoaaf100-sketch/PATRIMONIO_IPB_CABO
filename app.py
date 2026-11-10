@@ -688,11 +688,11 @@ li[role="option"][aria-selected="true"] {
 [data-testid="stHeader"] button[aria-label*="Sidebar"]::after {
     font-size: 10px !important; letter-spacing: 0 !important;
 }
-/* A tecla de reinício acompanha o menu sem cobrir seu clique. */
+/* Reserva 18 px de separação entre o MENU nativo e Reiniciar. */
 .st-key-reiniciar_sistema_ipb {
     position: fixed !important;
     top: 0.48rem !important;
-    left: 68px !important;
+    left: 86px !important;
     z-index: 99998 !important;
     width: 57px !important; min-width: 57px !important;
 }
@@ -707,7 +707,7 @@ li[role="option"][aria-selected="true"] {
 .st-key-reiniciar_sistema_ipb button:hover { background: #20a372 !important; }
 .st-key-reiniciar_sistema_ipb button p { color: #fff !important; font-size: 9px !important; white-space: nowrap !important; }
 @media (max-width: 768px) {
-    .st-key-reiniciar_sistema_ipb { top: .42rem !important; left: 68px !important; }
+    .st-key-reiniciar_sistema_ipb { top: .42rem !important; left: 86px !important; }
     .st-key-reiniciar_sistema_ipb button { padding: 0 2px !important; font-size: 9px !important; }
 }
 </style>
