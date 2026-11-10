@@ -15,6 +15,11 @@ from PIL import Image
 from postgrest import SyncPostgrestClient
 from supabase import create_client
 
+# Compatibilidade com streamlit-cookies-manager, que ainda usa @st.cache.
+# A versão atual do Streamlit removeu esse alias antigo.
+if not hasattr(st, "cache"):
+    st.cache = st.cache_resource
+
 try:
     from streamlit_cookies_manager import EncryptedCookieManager
 except ImportError:
