@@ -1022,7 +1022,7 @@ def exibir_foto_patrimonio(registro):
     try:
         dados = requisicao_foto("GET", caminho)
         st.image(dados, caption=f"{registro.get('codigo', '')} — {registro.get('descricao', '')}",
-                 width="content", width=360)
+                 width=360)
     except Exception:
         st.warning("Não foi possível carregar a foto. Verifique as permissões do Storage.")
 
