@@ -833,7 +833,8 @@ def listar_patrimonios():
         resposta = (
             api_usuario(st.session_state["access_token"])
             .from_("patrimonios")
-            .select("id,codigo,descricao,categoria_id,localizacao_id,marca,modelo,numero_serie,data_aquisicao,valor_aquisicao,estado_conservacao,situacao,subgrupo,observacoes,foto_caminho,nota_fiscal_caminho,criado_em,atualizado_em")
+            .select("id,codigo,descricao,categoria_id,localizacao_id,marca,modelo,numero_serie,data_aquisicao,valor_aquisicao,estado_conservacao,situacao,subgrupo,observacoes,foto_caminho,nota_fiscal_caminho,baixado_em,motivo_baixa,excluido_em,motivo_exclusao,criado_em,atualizado_em")
+            .is_("excluido_em", "null")
             .order("codigo")
             .range(pagina * tamanho, (pagina + 1) * tamanho - 1)
             .execute()
@@ -1187,7 +1188,7 @@ def pagina_patrimonios(papel):
         return
 
     pode_gerenciar = papel in ("admin", "gestor")
-    abas = ["Consultar patrimônios"] + (["Cadastrar patrimônio", "Editar patrimônio"] if pode_gerenciar else []) + (["Excluir patrimônio"] if papel == "admin" else [])
+    abas = ["Consultar patrimônios"] + (["Cadastrar patrimônio", "Editar patrimônio"] if pode_gerenciar else []) + (["Dar baixa", "Excluir patrimônio"] if papel == "admin" else [])
     if st.session_state.get("mensagem_patrimonio"):
         st.success(st.session_state.pop("mensagem_patrimonio"))
     # Aplicar a mudança de aba antes de instanciar o widget.
@@ -1227,7 +1228,7 @@ def pagina_patrimonios(papel):
                 "Subgrupo": r.get("subgrupo") or "—",
                 "Localização": locais_map.get(r.get("localizacao_id"), "—"),
                 "Marca": r.get("marca") or "—",
-                "Situação": r.get("situacao") or "—",
+                "Situação": "Baixado" if r.get("baixado_em") else (r.get("situacao") or "—"),
                 "Conservação": r.get("estado_conservacao") or "—",
             })
         st.caption(f"{len(filtrados)} patrimônio(s) encontrado(s)")
@@ -1241,48 +1242,72 @@ def pagina_patrimonios(papel):
             exibir_foto_patrimonio(por_id_foto[foto_id])
             st.markdown("#### Nota fiscal do patrimônio")
             exibir_nota_fiscal(por_id_foto[foto_id])
-    if aba == "Excluir patrimônio" and papel == "admin":
-        st.subheader("Excluir patrimônio")
-        st.warning("A exclusão é definitiva. Bens com histórico de empréstimos ou documentos vinculados não podem ser excluídos por esta tela.")
-        if not registros:
-            st.info("Não há patrimônios cadastrados para excluir.")
+    if aba == "Dar baixa" and papel == "admin":
+        st.subheader("Dar baixa no patrimônio")
+        st.info("A baixa retira o bem do patrimônio ativo, sem apagar documentos e histórico. Apenas o administrador pode realizar esta operação.")
+        candidatos = [r for r in registros if not r.get("baixado_em")]
+        if not candidatos:
+            st.info("Não há bens ativos disponíveis para baixa.")
         else:
-            por_id_exclusao = {r["id"]: r for r in registros}
-            id_exclusao = st.selectbox(
-                "Selecione o patrimônio que deseja excluir",
-                list(por_id_exclusao),
-                format_func=lambda i: f"{por_id_exclusao[i].get('codigo', '')} — {por_id_exclusao[i].get('descricao', '')}",
-                key="patrimonio_excluir_id",
-            )
-            bem_exclusao = por_id_exclusao[id_exclusao]
-            st.write(f"**Código:** {bem_exclusao.get('codigo') or '—'}")
-            st.write(f"**Descrição:** {bem_exclusao.get('descricao') or '—'}")
-            confirmar_exclusao = st.checkbox(
-                "Confirmo que desejo excluir definitivamente este patrimônio.",
-                key=f"confirmar_exclusao_{id_exclusao}",
-            )
-            if st.button("Excluir patrimônio definitivamente", type="primary",
-                         disabled=not confirmar_exclusao, key="executar_exclusao_patrimonio"):
+            mapa = {r["id"]: r for r in candidatos}
+            id_baixa = st.selectbox("Bem para baixa", list(mapa),
+                format_func=lambda i: f"{mapa[i].get('codigo', '')} — {mapa[i].get('descricao', '')}", key="id_baixa")
+            motivo = st.selectbox("Motivo da baixa", ["Inutilização", "Doação", "Venda", "Extravio", "Outro"], key="motivo_baixa_tipo")
+            detalhes = st.text_area("Justificativa / observações", key="motivo_baixa_detalhes")
+            confirmar = st.checkbox("Confirmo a baixa deste patrimônio.", key="confirma_baixa")
+            if st.button("Confirmar baixa", disabled=not confirmar, key="executar_baixa"):
                 try:
-                    cliente = api_usuario(st.session_state["access_token"])
-                    itens_vinculados = (cliente.from_("itens_emprestimo")
-                        .select("id").eq("patrimonio_id", id_exclusao).limit(1).execute()).data or []
-                    anexos_vinculados = (cliente.from_("anexos_ipb")
-                        .select("id").eq("patrimonio_id", id_exclusao).limit(1).execute()).data or []
-                    if itens_vinculados or anexos_vinculados:
-                        st.error("Exclusão bloqueada: este patrimônio possui empréstimos ou documentos vinculados. Preserve o histórico.")
+                    api = api_usuario(st.session_state["access_token"])
+                    ativos = (api.from_("itens_emprestimo").select("emprestimo_id")
+                        .eq("patrimonio_id", id_baixa).execute()).data or []
+                    if mapa[id_baixa].get("situacao") == "emprestado":
+                        st.error("Registre a devolução antes de dar baixa neste patrimônio.")
                     else:
-                        resposta_exclusao = (cliente.from_("patrimonios")
-                            .delete().eq("id", id_exclusao).select("id").execute())
-                        if resposta_exclusao.data:
-                            st.session_state["mensagem_patrimonio"] = "Patrimônio excluído com sucesso."
+                        from datetime import datetime, timezone
+                        resposta = (api.from_("patrimonios").update({
+                            "baixado_em": datetime.now(timezone.utc).isoformat(),
+                            "motivo_baixa": motivo + (" — " + detalhes.strip() if detalhes.strip() else "")
+                        }).eq("id", id_baixa).select("id").execute())
+                        if resposta.data:
+                            st.session_state["mensagem_patrimonio"] = "Baixa registrada. O histórico do patrimônio foi preservado."
                             st.session_state["patrimonio_aba_pendente"] = "Consultar patrimônios"
                             st.rerun()
                         else:
-                            st.error("A exclusão não foi confirmada pelo banco. Verifique as permissões do administrador (RLS).")
+                            st.error("Baixa não confirmada. Verifique a política RLS do Supabase.")
                 except Exception as erro:
-                    LOG.warning("Falha ao excluir patrimônio: %s", type(erro).__name__)
-                    st.error(f"Não foi possível excluir o patrimônio ({type(erro).__name__}). Verifique vínculos e permissões do banco.")
+                    LOG.warning("Falha ao dar baixa: %s", type(erro).__name__)
+                    st.error(f"Não foi possível registrar a baixa ({type(erro).__name__}).")
+    if aba == "Excluir patrimônio" and papel == "admin":
+        st.subheader("Exclusão administrativa de patrimônio")
+        st.warning("A exclusão administrativa retira o bem das consultas e dos indicadores, mas mantém os registros vinculados para auditoria. Apenas o administrador pode executar esta ação.")
+        if not registros:
+            st.info("Não há patrimônios cadastrados para excluir.")
+        else:
+            mapa = {r["id"]: r for r in registros}
+            id_exclusao = st.selectbox("Patrimônio a excluir", list(mapa),
+                format_func=lambda i: f"{mapa[i].get('codigo', '')} — {mapa[i].get('descricao', '')}", key="patrimonio_excluir_id")
+            bem = mapa[id_exclusao]
+            st.write(f"**Código:** {bem.get('codigo') or '—'}")
+            st.write(f"**Descrição:** {bem.get('descricao') or '—'}")
+            justificativa = st.text_area("Motivo da exclusão *", key="motivo_exclusao_admin")
+            confirmar = st.checkbox("Confirmo a exclusão administrativa deste bem.", key=f"confirma_exclusao_{id_exclusao}")
+            if st.button("Excluir patrimônio", type="primary", disabled=not (confirmar and justificativa.strip()), key="executar_exclusao_patrimonio"):
+                try:
+                    from datetime import datetime, timezone
+                    cliente = api_usuario(st.session_state["access_token"])
+                    resposta = (cliente.from_("patrimonios").update({
+                        "excluido_em": datetime.now(timezone.utc).isoformat(),
+                        "motivo_exclusao": justificativa.strip()
+                    }).eq("id", id_exclusao).select("id").execute())
+                    if resposta.data:
+                        st.session_state["mensagem_patrimonio"] = "Patrimônio excluído das consultas ativas. Histórico e documentos preservados."
+                        st.session_state["patrimonio_aba_pendente"] = "Consultar patrimônios"
+                        st.rerun()
+                    else:
+                        st.error("Exclusão não confirmada. Verifique as permissões RLS.")
+                except Exception as erro:
+                    LOG.warning("Falha na exclusão administrativa: %s", type(erro).__name__)
+                    st.error(f"Não foi possível excluir ({type(erro).__name__}).")
     if pode_gerenciar:
         if aba == "Cadastrar patrimônio":
             formulario_patrimonio("form_cadastro_patrimonio", categorias, locais)
@@ -1515,7 +1540,7 @@ def pagina_emprestimos(papel, nome_usuario):
     bens_map = {b["id"]: b for b in bens}
 
     if aba == "Novo empréstimo":
-        disponiveis = [b for b in bens if b.get("situacao") == "disponivel"]
+        disponiveis = [b for b in bens if b.get("situacao") == "disponivel" and not b.get("baixado_em")]
         if not disponiveis:
             st.info("Não existem patrimônios disponíveis para empréstimo.")
         else:
