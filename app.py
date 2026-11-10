@@ -679,8 +679,9 @@ li[role="option"][aria-selected="true"] {
 [data-testid="stSidebarCollapsedControl"] button,
 [data-testid="stHeader"] button[aria-label*="sidebar"],
 [data-testid="stHeader"] button[aria-label*="Sidebar"] {
-    width: 57px !important; min-width: 57px !important;
-    height: 39px !important; min-height: 39px !important;
+    box-sizing: border-box !important;
+    width: 64px !important; min-width: 64px !important; max-width: 64px !important;
+    height: 42px !important; min-height: 42px !important; max-height: 42px !important;
     border-radius: 10px !important; border-width: 2px !important;
 }
 [data-testid="stSidebarCollapsedControl"] button::after,
@@ -688,17 +689,18 @@ li[role="option"][aria-selected="true"] {
 [data-testid="stHeader"] button[aria-label*="Sidebar"]::after {
     font-size: 10px !important; letter-spacing: 0 !important;
 }
-/* Reserva 18 px de separação entre o MENU nativo e Reiniciar. */
+/* Botões do cabeçalho: dimensões idênticas e clique desobstruído. */
 .st-key-reiniciar_sistema_ipb {
     position: fixed !important;
     top: 0.48rem !important;
-    left: 86px !important;
+    left: 82px !important;
     z-index: 99998 !important;
-    width: 57px !important; min-width: 57px !important;
+    width: 64px !important; min-width: 64px !important; max-width: 64px !important;
 }
 .st-key-reiniciar_sistema_ipb button {
-    width: 57px !important; min-width: 57px !important; max-width: 57px !important;
-    min-height: 39px !important; height: 39px !important;
+    box-sizing: border-box !important;
+    width: 64px !important; min-width: 64px !important; max-width: 64px !important;
+    min-height: 42px !important; height: 42px !important; max-height: 42px !important;
     border-radius: 10px !important; padding: 0 2px !important;
     background: #147b58 !important; border: 2px solid #d7f3e4 !important;
     color: white !important; font-size: 9px !important;
@@ -707,7 +709,7 @@ li[role="option"][aria-selected="true"] {
 .st-key-reiniciar_sistema_ipb button:hover { background: #20a372 !important; }
 .st-key-reiniciar_sistema_ipb button p { color: #fff !important; font-size: 9px !important; white-space: nowrap !important; }
 @media (max-width: 768px) {
-    .st-key-reiniciar_sistema_ipb { top: .42rem !important; left: 86px !important; }
+    .st-key-reiniciar_sistema_ipb { top: .42rem !important; left: 82px !important; }
     .st-key-reiniciar_sistema_ipb button { padding: 0 2px !important; font-size: 9px !important; }
 }
 </style>
@@ -2670,7 +2672,11 @@ if not validar_sessao():
 # Reinicia a interface, sem apagar autenticação nem alterar registros do Supabase.
 # O botão é posicionado visualmente ao lado do MENU nativo via CSS.
 if st.button("Reiniciar", key="reiniciar_sistema_ipb", help="Recarregar a interface mantendo a sessão atual"):
+    st.session_state["_ipb_reinicio_confirmado"] = True
     st.rerun()
+
+if st.session_state.pop("_ipb_reinicio_confirmado", False):
+    st.toast("Sistema reiniciado com sucesso. Sua sessão foi mantida.", icon="🔄")
 
 perfil = st.session_state["profile"]
 papel = perfil.get("papel") or "consulta"
