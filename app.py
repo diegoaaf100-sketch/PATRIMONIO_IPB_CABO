@@ -697,7 +697,10 @@ def gerenciador_cookies():
         )
     cookies = st.session_state["_ipb_cookies"]
     if not cookies.ready():
-        st.stop()  # Aguarda o navegador disponibilizar os cookies.
+        # Não interromper a aplicação: o componente de cookies pode não
+        # inicializar em versões recentes do Streamlit. A tela de login
+        # deve continuar acessível mesmo nesse caso.
+        return None
     return cookies
 
 
