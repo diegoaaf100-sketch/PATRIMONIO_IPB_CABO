@@ -15,6 +15,11 @@ from PIL import Image
 from postgrest import SyncPostgrestClient
 from supabase import create_client
 
+try:
+    from streamlit_cookies_manager import EncryptedCookieManager
+except ImportError:
+    EncryptedCookieManager = None
+
 
 BASE_DIR = Path(__file__).resolve().parent
 LOGO_PATH = BASE_DIR / "assets" / "logo_ipb.png"
@@ -676,7 +681,63 @@ def consultar_perfil(token, user_id):
     return resposta.data[0] if resposta.data else None
 
 
+# Cookies criptografados para manter o login após F5 ou fechar/reabrir o navegador.
+# Configure COOKIE_PASSWORD (segredo aleatório e longo) no Streamlit Cloud.
+def gerenciador_cookies():
+    if EncryptedCookieManager is None or not st.secrets.get("COOKIE_PASSWORD"):
+        return None
+    if "_ipb_cookies" not in st.session_state:
+        st.session_state["_ipb_cookies"] = EncryptedCookieManager(
+            prefix="ipb_cabo_auth_", password=st.secrets["COOKIE_PASSWORD"]
+        )
+    cookies = st.session_state["_ipb_cookies"]
+    if not cookies.ready():
+        st.stop()  # Aguarda o navegador disponibilizar os cookies.
+    return cookies
+
+
+def persistir_sessao():
+    cookies = gerenciador_cookies()
+    if cookies is not None and st.session_state.get("refresh_token"):
+        cookies["refresh_token"] = st.session_state["refresh_token"]
+        cookies.save()
+
+
+def restaurar_sessao():
+    if st.session_state.get("refresh_token"):
+        return
+    cookies = gerenciador_cookies()
+    if cookies is None:
+        return
+    refresh = cookies.get("refresh_token")
+    if not refresh:
+        return
+    try:
+        resposta = cliente_auth().auth.refresh_session(refresh)
+        if not resposta.session or not resposta.user:
+            raise ValueError("Sessão não renovada")
+        perfil = consultar_perfil(resposta.session.access_token, resposta.user.id)
+        if not perfil or not perfil.get("ativo"):
+            raise PermissionError("Usuário sem acesso ativo")
+        st.session_state.update({
+            "access_token": resposta.session.access_token,
+            "refresh_token": resposta.session.refresh_token,
+            "user_id": resposta.user.id,
+            "profile": perfil,
+            "expires_at": resposta.session.expires_at or (int(time.time()) + resposta.session.expires_in),
+        })
+        persistir_sessao()
+    except Exception:
+        LOG.warning("Sessão persistida inválida; solicitando novo login")
+        cookies.pop("refresh_token", None)
+        cookies.save()
+
+
 def limpar_sessao():
+    cookies = gerenciador_cookies()
+    if cookies is not None:
+        cookies.pop("refresh_token", None)
+        cookies.save()
     for chave in ("access_token", "refresh_token", "user_id", "profile", "expires_at"):
         st.session_state.pop(chave, None)
 
@@ -695,6 +756,7 @@ def autenticar(email, senha):
         "profile": perfil,
         "expires_at": resposta.session.expires_at or (int(time.time()) + resposta.session.expires_in),
     })
+    persistir_sessao()
 
 
 def validar_sessao():
@@ -717,6 +779,7 @@ def validar_sessao():
             "profile": perfil,
             "expires_at": resposta.session.expires_at or (int(time.time()) + resposta.session.expires_in),
         })
+        persistir_sessao()
         return True
     except Exception:
         LOG.exception("Falha ao validar a sessão")
@@ -2488,6 +2551,7 @@ def painel_principal(nome):
     st.caption("Dados consultados no Supabase. Atualize a página para consultar novamente.")
 
 
+restaurar_sessao()
 if not st.session_state.get("access_token"):
     tela_login()
 if not validar_sessao():
