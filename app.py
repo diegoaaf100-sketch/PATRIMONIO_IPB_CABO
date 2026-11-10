@@ -1376,8 +1376,47 @@ def pagina_patrimonios(papel):
                 "Situação": "Baixado" if r.get("baixado_em") else (r.get("situacao") or "—"),
                 "Conservação": r.get("estado_conservacao") or "—",
             })
-        st.caption(f"{len(filtrados)} patrimônio(s) encontrado(s)")
-        st.dataframe(filtrados, width="stretch", hide_index=True)
+        # Painel de consulta: resumo e tabela com colunas estáveis, inclusive sem resultados.
+        st.markdown("#### Inventário de patrimônios")
+        total_ativos = sum(1 for r in registros if not r.get("baixado_em"))
+        total_baixados = len(registros) - total_ativos
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total cadastrado", len(registros))
+        m2.metric("Bens ativos", total_ativos)
+        m3.metric("Bens baixados", total_baixados)
+        m4.metric("Resultados da pesquisa", len(filtrados))
+
+        colunas_tabela = ["Código", "Descrição", "Categoria", "Subgrupo", "Localização", "Marca", "Situação", "Conservação"]
+        if filtrados:
+            st.dataframe(
+                filtrados,
+                width="stretch",
+                hide_index=True,
+                height=min(560, max(145, 38 * (len(filtrados) + 1))),
+                column_order=colunas_tabela,
+                column_config={
+                    "Código": st.column_config.TextColumn("🏷️ Código", width="small"),
+                    "Descrição": st.column_config.TextColumn("📦 Patrimônio / descrição", width="large"),
+                    "Categoria": st.column_config.TextColumn("Categoria", width="medium"),
+                    "Subgrupo": st.column_config.TextColumn("Subgrupo", width="medium"),
+                    "Localização": st.column_config.TextColumn("📍 Localização", width="medium"),
+                    "Marca": st.column_config.TextColumn("Marca", width="small"),
+                    "Situação": st.column_config.TextColumn("Situação", width="small"),
+                    "Conservação": st.column_config.TextColumn("Conservação", width="medium"),
+                },
+            )
+            st.caption(f"Exibindo {len(filtrados)} patrimônio(s) conforme os filtros selecionados.")
+        else:
+            st.markdown("""
+            <div style="padding:30px 22px;text-align:center;background:#10513d;
+                        border:1px solid #3b8667;border-radius:15px;margin:12px 0 20px;">
+              <div style="font-size:34px;margin-bottom:8px">📦</div>
+              <div style="font-size:19px;font-weight:750;color:#ffffff">Nenhum patrimônio encontrado</div>
+              <div style="font-size:14px;color:#d5eee0;margin-top:8px">
+                Cadastre o primeiro bem ou altere os filtros de pesquisa para consultar o inventário.
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
         if registros:
             st.markdown("#### Visualizar foto de um patrimônio")
             por_id_foto = {r["id"]: r for r in registros}
