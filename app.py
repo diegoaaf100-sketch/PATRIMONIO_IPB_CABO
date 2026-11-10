@@ -15,16 +15,10 @@ from PIL import Image
 from postgrest import SyncPostgrestClient
 from supabase import create_client
 
-# Compatibilidade com streamlit-cookies-manager, que ainda usa @st.cache.
-# A versão atual do Streamlit removeu esse alias antigo.
-if not hasattr(st, "cache"):
-    st.cache = st.cache_resource
-
-try:
-    from streamlit_cookies_manager import EncryptedCookieManager
-except ImportError:
-    EncryptedCookieManager = None
-
+# Persistência moderna de sessão: cookie criptografado no navegador.
+from streamlit_cookies_controller import CookieController
+from cryptography.fernet import Fernet, InvalidToken
+import hashlib
 
 BASE_DIR = Path(__file__).resolve().parent
 LOGO_PATH = BASE_DIR / "assets" / "logo_ipb.png"
@@ -686,39 +680,57 @@ def consultar_perfil(token, user_id):
     return resposta.data[0] if resposta.data else None
 
 
-# Cookies criptografados para manter o login após F5 ou fechar/reabrir o navegador.
-# Configure COOKIE_PASSWORD (segredo aleatório e longo) no Streamlit Cloud.
+# O refresh token é criptografado antes de ser salvo no cookie.
+# Nunca persistir access_token nem credenciais de administrador no navegador.
+COOKIE_NOME = "ipb_cabo_sessao_v2"
+
+
+def _cifra_cookie():
+    segredo = str(st.secrets.get("COOKIE_PASSWORD", ""))
+    if len(segredo) < 32:
+        return None
+    chave = base64.urlsafe_b64encode(hashlib.sha256(segredo.encode("utf-8")).digest())
+    return Fernet(chave)
+
+
 def gerenciador_cookies():
-    if EncryptedCookieManager is None or not st.secrets.get("COOKIE_PASSWORD"):
+    if _cifra_cookie() is None:
         return None
-    if "_ipb_cookies" not in st.session_state:
-        st.session_state["_ipb_cookies"] = EncryptedCookieManager(
-            prefix="ipb_cabo_auth_", password=st.secrets["COOKIE_PASSWORD"]
-        )
-    cookies = st.session_state["_ipb_cookies"]
-    if not cookies.ready():
-        # Não interromper a aplicação: o componente de cookies pode não
-        # inicializar em versões recentes do Streamlit. A tela de login
-        # deve continuar acessível mesmo nesse caso.
-        return None
-    return cookies
+    if "_ipb_cookie_controller" not in st.session_state:
+        st.session_state["_ipb_cookie_controller"] = CookieController()
+    return st.session_state["_ipb_cookie_controller"]
 
 
 def persistir_sessao():
-    cookies = gerenciador_cookies()
-    if cookies is not None and st.session_state.get("refresh_token"):
-        cookies["refresh_token"] = st.session_state["refresh_token"]
-        cookies.save()
+    controller = gerenciador_cookies()
+    token = st.session_state.get("refresh_token")
+    if controller is None or not token:
+        return
+    try:
+        valor = _cifra_cookie().encrypt(token.encode("utf-8")).decode("ascii")
+        controller.set(COOKIE_NOME, valor)
+    except Exception:
+        LOG.exception("Falha ao persistir cookie de autenticação")
+        st.warning("O login foi realizado, mas não foi possível salvar a sessão neste navegador.")
 
 
 def restaurar_sessao():
     if st.session_state.get("refresh_token"):
         return
-    cookies = gerenciador_cookies()
-    if cookies is None:
+    controller = gerenciador_cookies()
+    if controller is None:
         return
-    refresh = cookies.get("refresh_token")
-    if not refresh:
+    try:
+        valor = controller.get(COOKIE_NOME)
+    except Exception:
+        LOG.exception("Não foi possível ler o cookie de autenticação")
+        return
+    if not valor:
+        return
+    try:
+        refresh = _cifra_cookie().decrypt(valor.encode("ascii")).decode("utf-8")
+    except (InvalidToken, ValueError, TypeError):
+        controller.remove(COOKIE_NOME)
         return
     try:
         resposta = cliente_auth().auth.refresh_session(refresh)
@@ -736,16 +748,20 @@ def restaurar_sessao():
         })
         persistir_sessao()
     except Exception:
-        LOG.warning("Sessão persistida inválida; solicitando novo login")
-        cookies.pop("refresh_token", None)
-        cookies.save()
+        LOG.exception("Não foi possível restaurar a sessão do navegador")
+        try:
+            controller.remove(COOKIE_NOME)
+        except Exception:
+            LOG.exception("Não foi possível remover o cookie inválido")
 
 
 def limpar_sessao():
-    cookies = gerenciador_cookies()
-    if cookies is not None:
-        cookies.pop("refresh_token", None)
-        cookies.save()
+    controller = gerenciador_cookies()
+    if controller is not None:
+        try:
+            controller.remove(COOKIE_NOME)
+        except Exception:
+            LOG.exception("Falha ao remover cookie no logout")
     for chave in ("access_token", "refresh_token", "user_id", "profile", "expires_at"):
         st.session_state.pop(chave, None)
 
