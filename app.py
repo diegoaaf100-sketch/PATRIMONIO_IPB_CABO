@@ -638,37 +638,6 @@ li[role="option"][aria-selected="true"] {
   -webkit-text-fill-color: #ffffff !important;
 }
 
-
-/* IPB CABO — avisos em superfície clara: texto verde-escuro sempre legível.
-   Abrange st.info, st.warning e caixas informativas semelhantes.
-   Erros e confirmações mantêm suas cores de status. */
-[data-testid="stAlert"]:has([data-testid="stAlertContentInfo"]),
-[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]),
-[data-testid="stAlert"]:has([data-testid="stAlertContent"]),
-[data-testid="stAlert"]:has([data-baseweb="notification"]) {
-  color: #073f30 !important;
-}
-/* Aplica a cor diretamente ao conteúdo dos avisos, superando regras globais de p e Markdown. */
-[data-testid="stAlert"] [data-testid="stMarkdownContainer"],
-[data-testid="stAlert"] [data-testid="stMarkdownContainer"] *,
-[data-testid="stAlert"] [data-testid="stAlertContent"],
-[data-testid="stAlert"] [data-testid="stAlertContent"] *,
-[data-testid="stAlert"] [data-testid="stAlertContentInfo"],
-[data-testid="stAlert"] [data-testid="stAlertContentInfo"] *,
-[data-testid="stAlert"] [data-testid="stAlertContentWarning"],
-[data-testid="stAlert"] [data-testid="stAlertContentWarning"] * {
-  color: #073f30 !important;
-  -webkit-text-fill-color: #073f30 !important;
-}
-/* Não modifica os ícones nem o texto de avisos de erro ou sucesso. */
-[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) [data-testid="stMarkdownContainer"],
-[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) [data-testid="stMarkdownContainer"] *,
-[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) [data-testid="stMarkdownContainer"],
-[data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) [data-testid="stMarkdownContainer"] * {
-  color: inherit !important;
-  -webkit-text-fill-color: currentColor !important;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -830,7 +799,7 @@ def tela_login():
         with st.form("login"):
             email = st.text_input("E-mail", placeholder="Digite seu e-mail")
             senha = st.text_input("Senha", type="password", placeholder="Digite sua senha")
-            enviar = st.form_submit_button("Entrar no sistema", type="primary", use_container_width=True)
+            enviar = st.form_submit_button("Entrar no sistema", type="primary", width="stretch")
         if enviar:
             if not email.strip() or not senha:
                 st.warning("Informe o e-mail e a senha.")
@@ -1053,7 +1022,7 @@ def exibir_foto_patrimonio(registro):
     try:
         dados = requisicao_foto("GET", caminho)
         st.image(dados, caption=f"{registro.get('codigo', '')} — {registro.get('descricao', '')}",
-                 use_container_width=False, width=360)
+                 width="content", width=360)
     except Exception:
         st.warning("Não foi possível carregar a foto. Verifique as permissões do Storage.")
 
@@ -1119,7 +1088,7 @@ def formulario_patrimonio(chave, categorias, localizacoes, registro=None):
             st.caption("A situação (disponível/emprestado/manutenção) não é alterada aqui, para preservar o fluxo de empréstimos.")
         enviar = st.form_submit_button(
             "Salvar alterações" if edicao else "Cadastrar patrimônio",
-            type="primary", use_container_width=True,
+            type="primary", width="stretch",
         )
     if not enviar:
         return
@@ -1263,7 +1232,7 @@ def pagina_patrimonios(papel):
                 "Conservação": r.get("estado_conservacao") or "—",
             })
         st.caption(f"{len(filtrados)} patrimônio(s) encontrado(s)")
-        st.dataframe(filtrados, use_container_width=True, hide_index=True)
+        st.dataframe(filtrados, width="stretch", hide_index=True)
         if registros:
             st.markdown("#### Visualizar foto de um patrimônio")
             por_id_foto = {r["id"]: r for r in registros}
@@ -1596,7 +1565,7 @@ def pagina_emprestimos(papel, nome_usuario):
                     recebimento = st.text_input("Responsável pelo recebimento *", value="")
                 finalidade = st.text_area("Finalidade do empréstimo")
                 observacoes = st.text_area("Observações")
-                enviar = st.form_submit_button("Registrar empréstimo", type="primary", use_container_width=True)
+                enviar = st.form_submit_button("Registrar empréstimo", type="primary", width="stretch")
             if enviar:
                 if not ids or not nome_pessoa.strip() or not entrega.strip() or not recebimento.strip():
                     st.error("Informe o nome de quem recebe, selecione os bens e preencha os responsáveis pela entrega e recebimento.")
@@ -1685,7 +1654,7 @@ def pagina_emprestimos(papel, nome_usuario):
                         pdf = recibo_emprestimo_pdf(registro, dados_recebedor, bens_recibo)
                         st.download_button("Baixar recibo em PDF", data=pdf,
                             file_name=f"recibo_emprestimo_{numero_recibo}.pdf",
-                            mime="application/pdf", type="primary", use_container_width=True,
+                            mime="application/pdf", type="primary", width="stretch",
                             key=f"recibo_apos_salvar_{numero_recibo}")
             except Exception as erro:
                 LOG.warning("Erro ao preparar recibo após salvar: %s", type(erro).__name__)
@@ -1696,7 +1665,7 @@ def pagina_emprestimos(papel, nome_usuario):
         for e in emprestimos:
             linhas.append({"Número": e["numero"], "Recebedor": pessoas_map.get(e["pessoa_id"], {}).get("nome", "—"), "Retirada": e.get("data_retirada"), "Previsão": e.get("data_prevista_devolucao") or "—", "Status": e.get("status")})
         st.caption(f"{len(linhas)} empréstimo(s) listado(s) — últimos 500")
-        st.dataframe(linhas, use_container_width=True, hide_index=True)
+        st.dataframe(linhas, width="stretch", hide_index=True)
 
     elif aba == "Emitir recibo":
         if not emprestimos:
@@ -1717,7 +1686,7 @@ def pagina_emprestimos(papel, nome_usuario):
                     st.warning("Pessoa associada ao empréstimo não encontrada.")
                 else:
                     pdf = recibo_emprestimo_pdf(emprestimo, pessoas_map[emprestimo["pessoa_id"]], bens_recibo)
-                    st.download_button("Baixar recibo em PDF", data=pdf, file_name=f"recibo_emprestimo_{numero}.pdf", mime="application/pdf", type="primary", use_container_width=True)
+                    st.download_button("Baixar recibo em PDF", data=pdf, file_name=f"recibo_emprestimo_{numero}.pdf", mime="application/pdf", type="primary", width="stretch")
                     st.caption("Imprima o recibo e recolha as assinaturas em papel. O PDF é gerado sob demanda e não é anexado automaticamente ao Supabase.")
             except ImportError:
                 st.error("A biblioteca reportlab não está instalada. Adicione reportlab ao requirements.txt do GitHub.")
@@ -1767,7 +1736,7 @@ def pagina_devolucoes(papel, nome_usuario):
                    "Previsão": e.get("data_prevista_devolucao") or "—"}
                   for e in ativos]
         st.caption(f"{len(linhas)} empréstimo(s) ativo(s)")
-        st.dataframe(linhas, use_container_width=True, hide_index=True)
+        st.dataframe(linhas, width="stretch", hide_index=True)
 
     elif aba == "Registrar devolução":
         if not ativos:
@@ -1804,7 +1773,7 @@ def pagina_devolucoes(papel, nome_usuario):
                 estado = st.selectbox("Estado dos bens devolvidos", ["Não alterar", "Novo", "Bom", "Regular", "Ruim"])
                 st.caption("Estado Ruim encaminha o patrimônio para manutenção.")
             observacoes = st.text_area("Observações da devolução")
-            enviar = st.form_submit_button("Confirmar devolução", type="primary", use_container_width=True)
+            enviar = st.form_submit_button("Confirmar devolução", type="primary", width="stretch")
         if enviar:
             if not selecionados or not responsavel.strip():
                 st.error("Selecione os patrimônios e informe o responsável.")
@@ -1860,7 +1829,7 @@ def pagina_devolucoes(papel, nome_usuario):
                         "Observações": i.get("observacoes") or "—",
                     })
         st.caption(f"{len(linhas)} bem(ns) devolvido(s) — empréstimos mais recentes")
-        st.dataframe(linhas, use_container_width=True, hide_index=True)
+        st.dataframe(linhas, width="stretch", hide_index=True)
         st.info("Anexos de recibos assinados serão habilitados após configurar um bucket privado no Supabase Storage.")
 
 
@@ -1935,7 +1904,7 @@ def pagina_documentos(papel):
             patrimonio_id = st.selectbox("Patrimônio vinculado (opcional)", escolhas,
                 format_func=lambda x: "Empréstimo completo (todos os bens)" if not x else f"{mapa[x]['codigo']} — {mapa[x]['descricao']}")
             arquivo = st.file_uploader("Arquivo assinado (PDF, JPG ou PNG, até 10 MB)", type=["pdf","jpg","jpeg","png"])
-            enviar = st.form_submit_button("Salvar comprovante", type="primary", use_container_width=True)
+            enviar = st.form_submit_button("Salvar comprovante", type="primary", width="stretch")
         if enviar:
             if arquivo is None:
                 st.warning("Selecione um arquivo.")
@@ -2045,7 +2014,7 @@ def pagina_historico_patrimonio():
             "Estado na devolução": item.get("estado_na_devolucao") or "—",
             "Responsável devolução": item.get("responsavel_devolucao") or "—",
         })
-    st.dataframe(linhas, use_container_width=True, hide_index=True)
+    st.dataframe(linhas, width="stretch", hide_index=True)
     st.caption(f"{len(linhas)} movimentação(ões) registrada(s)")
     st.subheader("Comprovantes relacionados")
     if anexos:
@@ -2257,7 +2226,7 @@ def pagina_relatorios():
         st.metric("Movimentações encontradas", len(linhas))
         st.caption("Empréstimos são exibidos por bem. Pendências e atrasos consideram somente itens ainda não devolvidos.")
     st.caption(f"{len(linhas)} linha(s) no relatório")
-    st.dataframe(linhas, use_container_width=True, hide_index=True)
+    st.dataframe(linhas, width="stretch", hide_index=True)
     resumo = f"Emitido em {hoje:%d/%m/%Y} | Registros: {len(linhas)}{periodo} | Categoria: {categoria} | Local: {local} | Situação: {situacao}"
     try:
         pdf = relatorio_pdf(tipo, colunas, linhas, resumo)
@@ -2272,10 +2241,10 @@ def pagina_relatorios():
     cpdf, cexcel = st.columns(2)
     with cpdf:
         st.download_button("Baixar relatório em PDF", data=pdf, file_name="relatorio_ipb_cabo.pdf",
-            mime="application/pdf", type="primary", use_container_width=True)
+            mime="application/pdf", type="primary", width="stretch")
     with cexcel:
         st.download_button("Baixar relatório em Excel", data=excel, file_name="relatorio_ipb_cabo.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
 
 
 # ==========================================
@@ -2306,7 +2275,7 @@ def funcao_admin_ipb(acao, **campos):
 
 def pagina_usuarios_ipb(papel):
     st.header("Administração de usuários")
-    st.caption("Convites, permissões e controle de acesso ao sistema")
+    st.caption("Cadastro de usuários, permissões e controle de acesso ao sistema")
     if papel != "admin":
         st.error("Acesso exclusivo do administrador.")
         return
@@ -2319,26 +2288,55 @@ def pagina_usuarios_ipb(papel):
         st.error("Não foi possível consultar os usuários: " + type(exc).__name__)
         return
     st.metric("Usuários cadastrados", len(perfis))
-    st.dataframe([{"Nome": x.get("nome_completo") or "—", "Perfil": x.get("papel") or "—", "Situação": "Ativo" if x.get("ativo") else "Bloqueado", "ID": x["id"]} for x in perfis], use_container_width=True, hide_index=True)
-    abas = st.tabs(["Convidar usuário", "Alterar permissões / bloquear"])
+    st.dataframe([{"Nome": x.get("nome_completo") or "—", "Perfil": x.get("papel") or "—", "Situação": "Ativo" if x.get("ativo") else "Bloqueado", "ID": x["id"]} for x in perfis], width="stretch", hide_index=True)
+    abas = st.tabs(["Cadastrar usuário", "Alterar senha", "Alterar permissões / bloquear"])
     with abas[0]:
-        st.info("O usuário receberá um convite para configurar o acesso por e-mail. Configure o envio de e-mails do Supabase Auth para uso em produção.")
-        with st.form("convite_usuario_ipb"):
+        with st.form("cadastro_usuario_ipb"):
             nome = st.text_input("Nome completo *")
             email = st.text_input("E-mail *")
+            senha_nova = st.text_input("Senha inicial *", type="password", help="Mínimo de 8 caracteres. Informe a senha ao usuário por um canal seguro.")
             perfil_novo = st.selectbox("Perfil de acesso", ["consulta", "gestor", "admin"], format_func=lambda x: {"consulta":"Consulta", "gestor":"Gestor", "admin":"Administrador"}[x])
-            enviar = st.form_submit_button("Enviar convite", type="primary", use_container_width=True)
+            enviar = st.form_submit_button("Cadastrar usuário", type="primary", width="stretch")
         if enviar:
             if not nome.strip() or "@" not in email or not email.strip():
                 st.error("Informe nome e e-mail válidos.")
+            elif len(senha_nova) < 8:
+                st.error("A senha deve ter pelo menos 8 caracteres.")
             else:
                 try:
-                    funcao_admin_ipb("criar", nome=nome.strip(), email=email.strip().lower(), papel=perfil_novo)
+                    funcao_admin_ipb("cadastrar", nome=nome.strip(), email=email.strip().lower(), senha=senha_nova, papel=perfil_novo)
                 except Exception as exc:
                     st.error(str(exc))
                 else:
-                    st.success("Convite solicitado com sucesso. Confira o e-mail do destinatário.")
+                    st.success("Usuário cadastrado com sucesso. Ele já pode acessar o sistema com o e-mail e a senha definidos.")
     with abas[1]:
+        st.info("Somente o administrador pode definir uma nova senha. A senha anterior não será exibida.")
+        if not perfis:
+            st.warning("Nenhum usuário disponível.")
+        else:
+            mapa_senhas = {p["id"]: p for p in perfis}
+            with st.form("alterar_senha_usuario_ipb"):
+                usuario_senha = st.selectbox(
+                    "Usuário que terá a senha alterada",
+                    list(mapa_senhas),
+                    format_func=lambda i: mapa_senhas[i].get("nome_completo") or "Sem nome",
+                )
+                nova_senha = st.text_input("Nova senha *", type="password", help="Mínimo de 8 caracteres")
+                confirmar_senha = st.text_input("Confirmar nova senha *", type="password")
+                alterar_senha = st.form_submit_button("Alterar senha", type="primary", width="stretch")
+            if alterar_senha:
+                if len(nova_senha) < 8:
+                    st.error("A senha deve ter pelo menos 8 caracteres.")
+                elif nova_senha != confirmar_senha:
+                    st.error("As senhas digitadas não coincidem.")
+                else:
+                    try:
+                        funcao_admin_ipb("alterar_senha", usuario_id=usuario_senha, senha=nova_senha)
+                    except Exception as exc:
+                        st.error(str(exc))
+                    else:
+                        st.success("Senha alterada com sucesso. O usuário deverá utilizar a nova senha no próximo login.")
+    with abas[2]:
         outros = [p for p in perfis if p["id"] != st.session_state["user_id"]]
         if not outros:
             st.info("Ainda não há outros usuários para administrar.")
@@ -2350,7 +2348,7 @@ def pagina_usuarios_ipb(papel):
             with st.form("editar_usuario_ipb_" + selecionado):
                 papel_editado = st.selectbox("Perfil", papeis, index=papeis.index(atual["papel"]) if atual.get("papel") in papeis else 0)
                 ativo = st.checkbox("Usuário ativo", value=bool(atual.get("ativo")))
-                salvar = st.form_submit_button("Salvar alterações", type="primary", use_container_width=True)
+                salvar = st.form_submit_button("Salvar alterações", type="primary", width="stretch")
             if salvar:
                 try:
                     funcao_admin_ipb("alterar", usuario_id=selecionado, papel=papel_editado, ativo=ativo)
@@ -2482,7 +2480,7 @@ def painel_principal(nome):
                  "Previsão de devolução": str(e.get("data_prevista_devolucao") or "")[:10],
                  "Status": e.get("status") or "Não informado"}
                 for e in atrasados[:10]
-            ]), hide_index=True, use_container_width=True)
+            ]), hide_index=True, width="stretch")
         else:
             st.markdown('<div class="ipb-note">✓ Nenhum empréstimo com prazo vencido identificado nos registros consultados.</div>', unsafe_allow_html=True)
         st.caption("Resumo de empréstimos limitado aos 500 registros mais recentes disponíveis na consulta atual.")
@@ -2512,7 +2510,7 @@ with st.sidebar:
     st.caption("Perfil: " + papel.upper())
     st.divider()
     st.divider()
-    if st.button("Sair do sistema", use_container_width=True):
+    if st.button("Sair do sistema", width="stretch"):
         limpar_sessao()
         st.rerun()
 
