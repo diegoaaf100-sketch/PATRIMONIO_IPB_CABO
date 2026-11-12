@@ -684,6 +684,57 @@ li[role="option"][aria-selected="true"] {
 [data-testid="stSidebarHeader"] button:hover {
     background: transparent !important; box-shadow: none !important;
 }
+
+/* IPB-CABO: contraste consistente conforme a superfície.
+   Superfícies claras = texto verde; superfícies verdes = texto branco. */
+:root { --ipb-texto-escuro: #103f30; --ipb-texto-claro: #ffffff; }
+/* Cartões brancos, formulários, indicadores e expansores claros. */
+[data-testid="stForm"]:not(:has(input[placeholder="Digite seu e-mail"])) > div,
+[data-testid="stForm"]:not(:has(input[placeholder="Digite seu e-mail"])) [data-testid="stWidgetLabel"],
+[data-testid="stForm"]:not(:has(input[placeholder="Digite seu e-mail"])) [data-testid="stWidgetLabel"] *,
+[data-testid="stForm"]:not(:has(input[placeholder="Digite seu e-mail"])) [data-testid="stMarkdownContainer"] p,
+[data-testid="stMetric"] [data-testid="stMetricLabel"] *,
+[data-testid="stMetric"] [data-testid="stMetricValue"] *,
+[data-testid="stMetric"] [data-testid="stMetricDelta"] *,
+[data-testid="stExpander"] details[open] > summary,
+[data-testid="stExpander"] details > summary {
+  color: var(--ipb-texto-escuro) !important;
+  -webkit-text-fill-color: var(--ipb-texto-escuro) !important;
+}
+/* Botões secundários com fundo branco, inclusive textos internos. */
+.stButton button[kind="secondary"],
+.stButton button[kind="secondary"] *,
+[data-testid="stDownloadButton"] button[kind="secondary"],
+[data-testid="stDownloadButton"] button[kind="secondary"] * {
+  color: var(--ipb-texto-escuro) !important;
+  -webkit-text-fill-color: var(--ipb-texto-escuro) !important;
+}
+.stButton button[kind="secondary"],
+[data-testid="stDownloadButton"] button[kind="secondary"] {
+  background-color: #ffffff !important;
+  border-color: #a8cdbb !important;
+}
+/* Fundo verde dos botões primários, login e navegação sempre com letras brancas. */
+.stButton button[kind="primary"], .stButton button[kind="primary"] *,
+[data-testid="stFormSubmitButton"] button, [data-testid="stFormSubmitButton"] button *,
+[data-testid="stSidebar"] [data-testid="stRadio"] label p,
+.st-key-navegacao_ipb [data-testid="stRadio"] label p {
+  color: var(--ipb-texto-claro) !important;
+  -webkit-text-fill-color: var(--ipb-texto-claro) !important;
+}
+/* Seletores e campos escuros mantêm a fonte clara. */
+[data-baseweb="select"] > div, [data-baseweb="select"] > div *,
+[data-testid="stTextInput"] input, [data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input, [data-testid="stTextArea"] textarea {
+  color: var(--ipb-texto-claro) !important;
+  -webkit-text-fill-color: var(--ipb-texto-claro) !important;
+}
+/* Dropdowns brancos do navegador/BaseWeb: fonte escura quando não há cor de fundo verde definida. */
+[data-baseweb="popover"] [role="listbox"] [aria-selected="false"]:not([role="option"]),
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] p {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
